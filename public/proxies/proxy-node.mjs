@@ -1,11 +1,15 @@
 #!/usr/bin/env node
 /**
- * Neon DB Admin — Hardened Standalone Node.js Database Proxy (v1.1.0)
+ * Neon DB Admin — Standalone Node.js Database Proxy (v1.2.0)
  *
  * Supported Databases: MySQL, MariaDB (mysql2), PostgreSQL (pg), SQLite (node:sqlite in Node 22+)
  * CORS: Access-Control-Allow-Origin: *
  *
  * Usage:
+ *   # Quick start (NEON_DB_PROXY_TOKEN is optional):
+ *   PORT=8787 node proxy-node.mjs
+ *
+ *   # Optional token authentication (recommended for shared/public networks):
  *   NEON_DB_PROXY_TOKEN="$(openssl rand -hex 32)" PORT=8787 node proxy-node.mjs
  *   (Install optional drivers as needed: `npm i mysql2 pg`)
  */
@@ -18,9 +22,8 @@ import fs from 'node:fs';
 const PORT = Number(process.env.PORT || 8787);
 const HOST = process.env.HOST || '127.0.0.1';
 const PROXY_TOKEN = process.env.NEON_DB_PROXY_TOKEN || '';
-const UNSAFE_NO_AUTH = process.argv.includes('--unsafe-no-auth');
 const ALLOWED_ORIGIN = process.env.NEON_DB_ALLOWED_ORIGIN || '*';
-const SQLITE_ALLOWED_DIR = path.resolve(process.env.NEON_DB_SQLITE_DIR || path.join(process.cwd(), 'databases'));
+const SQLITE_ALLOWED_DIR = path.resolve(process.env.NEON_DB_SQLITE_DIR || process.cwd());
 const MAX_ROWS = Math.min(Math.max(Number(process.env.NEON_DB_MAX_ROWS) || 5000, 1), 10000);
 const QUERY_TIMEOUT_MS = Math.min(Math.max(Number(process.env.NEON_DB_TIMEOUT_MS) || 15000, 1000), 60000);
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
@@ -48,7 +51,7 @@ function corsHeaders(extra = {}) {
     'Content-Type': 'application/json; charset=utf-8',
     'X-Content-Type-Options': 'nosniff',
     'Cache-Control': 'no-store',
-    'X-Proxy-Version': '1.1.0',
+    'X-Proxy-Version': '1.2.0',
     ...extra,
   };
 }
@@ -354,11 +357,11 @@ const server = http.createServer(async (req, res) => {
         service: 'neon-db-admin-proxy',
         runtime: 'nodejs',
         nodeVersion: process.version,
-        version: '1.1.0',
+        version: '1.2.0',
         cors: ALLOWED_ORIGIN,
         supportedDialects: ['mysql', 'mariadb', 'postgresql', 'sqlite'],
-        authRequired: !UNSAFE_NO_AUTH,
-        configured: PROXY_TOKEN.length >= 16 || UNSAFE_NO_AUTH,
+        authRequired: Boolean(PROXY_TOKEN),
+        configured: true,
       });
       return;
     }
@@ -368,14 +371,8 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    if (!UNSAFE_NO_AUTH) {
-      if (PROXY_TOKEN.length < 16) {
-        sendJson(res, 503, {
-          ok: false,
-          error: 'Proxy token is not configured. Set NEON_DB_PROXY_TOKEN (>= 16 chars) before starting proxy-node.mjs.',
-        });
-        return;
-      }
+    // Optional authentication — enforced only when NEON_DB_PROXY_TOKEN is set
+    if (PROXY_TOKEN !== '') {
       const auth = req.headers['x-proxy-token'] || (req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.slice(7) : '');
       if (!auth || !safeEqual(String(auth), PROXY_TOKEN)) {
         sendJson(res, 401, { ok: false, error: 'Unauthorized: invalid or missing proxy token.' });
@@ -458,5 +455,5 @@ const server = http.createServer(async (req, res) => {
 
 server.requestTimeout = QUERY_TIMEOUT_MS + 5000;
 server.listen(PORT, HOST, () => {
-  console.log(`Neon DB Admin Node.js Proxy v1.1.0 listening on http://${HOST}:${PORT} (CORS: ${ALLOWED_ORIGIN}, Auth: ${UNSAFE_NO_AUTH ? 'DISABLED' : 'REQUIRED'})`);
+  console.log(`Neon DB Admin Node.js Proxy v1.2.0 listening on http://${HOST}:${PORT} (CORS: ${ALLOWED_ORIGIN}, Auth: ${PROXY_TOKEN ? 'ENABLED' : 'OPTIONAL/OFF'})`);
 });

@@ -6,6 +6,7 @@ import type { ConnectionConfig, DbDialect, TransportType } from '../types/db.js'
 import { el, labeledField, openModal, toast } from './dom.js';
 import { icon } from './icons.js';
 import { handleSqliteFileUpload } from './import-export.js';
+import { renderProxyGuidePanel } from './proxy-guide-modal.js';
 
 const PRESET_PROXY_URLS = new Set([
   '',
@@ -14,16 +15,66 @@ const PRESET_PROXY_URLS = new Set([
   'http://127.0.0.1:8787',
 ]);
 
-export function openConnectionModal(editing?: ConnectionConfig): void {
+export function openConnectionModal(editing?: ConnectionConfig, initialTab: 'connect' | 'proxy' = 'connect'): void {
   const draft: ConnectionConfig = editing ? { ...editing } : createEmptyConnectionTemplate();
   if (draft.sslRejectUnauthorized === undefined) draft.sslRejectUnauthorized = true;
+  let activeTab: 'connect' | 'proxy' = initialTab;
 
   openModal({
     title: editing ? `${t('connect')} — 編集` : t('connect'),
     large: true,
     renderBody: (body, close) => {
-      const renderForm = () => {
+      const renderModalContent = () => {
         body.replaceChildren();
+
+        // Modal tab bar: 接続設定 | プロキシ設定 / ダウンロード
+        const tabBar = el(
+          'div',
+          {
+            role: 'tablist',
+            'aria-label': '接続管理タブ',
+            style: { display: 'flex', gap: '6px', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '10px' },
+          },
+          el(
+            'button',
+            {
+              type: 'button',
+              role: 'tab',
+              'aria-selected': String(activeTab === 'connect'),
+              className: `btn btn-sm ${activeTab === 'connect' ? 'btn-primary' : ''}`,
+              onClick: () => {
+                activeTab = 'connect';
+                renderModalContent();
+              },
+            },
+            icon('database', 13),
+            '接続設定'
+          ),
+          el(
+            'button',
+            {
+              type: 'button',
+              role: 'tab',
+              'aria-selected': String(activeTab === 'proxy'),
+              className: `btn btn-sm ${activeTab === 'proxy' ? 'btn-primary' : ''}`,
+              onClick: () => {
+                activeTab = 'proxy';
+                renderModalContent();
+              },
+            },
+            icon('server', 13),
+            t('proxySetup')
+          )
+        );
+
+        body.append(tabBar);
+
+        if (activeTab === 'proxy') {
+          const proxyHost = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '12px' } });
+          renderProxyGuidePanel(proxyHost);
+          body.append(proxyHost);
+          return;
+        }
 
         const fileInp = el('input', {
           type: 'file',
@@ -44,7 +95,7 @@ export function openConnectionModal(editing?: ConnectionConfig): void {
         const quickBox = el(
           'div',
           { className: 'card', style: { background: 'var(--bg-subtle)' } },
-          el('div', { style: { fontWeight: '700', fontSize: '0.84rem', marginBottom: '8px' } }, 'クイック開始（ブラウザ内 SQLite WASM / ファイルアップロード）'),
+          el('div', { style: { fontWeight: '700', fontSize: '0.84rem', marginBottom: '8px' } }, 'ローカル SQLite (ブラウザ WASM)'),
           el(
             'div',
             { className: 'toolbar-group' },
@@ -96,7 +147,7 @@ export function openConnectionModal(editing?: ConnectionConfig): void {
                   draft.proxyUrl = 'https://your-server.example.com/proxy.php';
                 }
               }
-              renderForm();
+              renderModalContent();
             },
           },
           el('option', { value: 'postgresql', selected: draft.dialect === 'postgresql' }, 'PostgreSQL (Neon / Supabase / RDS / Self-hosted)'),
@@ -114,13 +165,12 @@ export function openConnectionModal(editing?: ConnectionConfig): void {
             className: 'select',
             onChange: (e: Event) => {
               draft.transport = (e.target as HTMLSelectElement).value as TransportType;
-              // Only replace proxyUrl if it's still one of the preset defaults (M6)
               if (PRESET_PROXY_URLS.has(draft.proxyUrl || '')) {
                 if (draft.transport === 'cloudflare-worker') draft.proxyUrl = DEFAULT_WORKER_PROXY_URL;
                 else if (draft.transport === 'php-proxy') draft.proxyUrl = 'https://your-server.example.com/proxy.php';
                 else if (draft.transport === 'node-proxy') draft.proxyUrl = 'http://127.0.0.1:8787';
               }
-              renderForm();
+              renderModalContent();
             },
           },
           el('option', { value: 'cloudflare-worker', selected: draft.transport === 'cloudflare-worker' }, 'Cloudflare Workers プロキシ (CORS対応・ライブ利用可)'),
@@ -152,7 +202,7 @@ export function openConnectionModal(editing?: ConnectionConfig): void {
           type: 'password',
           className: 'input mono',
           value: draft.proxyToken || '',
-          placeholder: 'X-Proxy-Token (任意 / proxy.php・proxy-node.mjsでは必須)',
+          placeholder: 'X-Proxy-Token (任意 — 未設定でも利用可能)',
           onInput: (e: Event) => {
             draft.proxyToken = (e.target as HTMLInputElement).value;
           },
@@ -371,7 +421,24 @@ export function openConnectionModal(editing?: ConnectionConfig): void {
           el(
             'div',
             { className: 'card', style: { display: 'flex', flexDirection: 'column', gap: '10px' } },
-            el('div', { style: { fontWeight: '700', fontSize: '0.86rem' } }, 'リモートデータベース接続設定 (Cloudflare Workers / PHP / Node プロキシ)'),
+            el(
+              'div',
+              { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px' } },
+              el('span', { style: { fontWeight: '700', fontSize: '0.86rem' } }, 'リモートデータベース接続設定 (Cloudflare Workers / PHP / Node プロキシ)'),
+              el(
+                'button',
+                {
+                  type: 'button',
+                  className: 'btn btn-ghost btn-sm',
+                  onClick: () => {
+                    activeTab = 'proxy';
+                    renderModalContent();
+                  },
+                },
+                icon('download', 12),
+                'proxy.php / proxy-node.mjs を取得'
+              )
+            ),
             el('div', { className: 'field-row' }, labeledField('接続名', nameInp), labeledField('データベース種別', dialectSel)),
             el('div', { className: 'field-row' }, labeledField('接続プロキシ方式', transportSel), labeledField('プロキシ URL', proxyUrlInp)),
             labeledField('プロキシ認証トークン (任意)', proxyTokenInp),
@@ -443,7 +510,7 @@ export function openConnectionModal(editing?: ConnectionConfig): void {
           )
         );
       };
-      renderForm();
+      renderModalContent();
     },
   });
 }

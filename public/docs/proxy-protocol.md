@@ -26,7 +26,7 @@ All proxy implementations (`workers/proxy-worker`, `proxies/proxy.php`, `proxies
 }
 ```
 
-## Security Requirements
-- Always set `PROXY_AUTH_TOKEN` (Workers) or `NEON_DB_PROXY_TOKEN` (PHP/Node) when self-hosting.
+## Security Recommendations
+- `NEON_DB_PROXY_TOKEN` is optional in `proxy.php` and `proxy-node.mjs` (both work out-of-the-box without a token, and automatically enforce constant-time token verification when configured). Set `PROXY_AUTH_TOKEN` (Workers) or `NEON_DB_PROXY_TOKEN` (PHP/Node) when exposing a proxy on a public network.
 - Always deploy behind HTTPS in production.
 - Never allow private IP / cloud metadata targets on public-facing Workers proxies.

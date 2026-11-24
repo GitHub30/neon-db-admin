@@ -11,6 +11,8 @@ const KEYS = {
   locale: 'neondb_locale_v1',
 };
 
+const LEGACY_DEMO_IDS = new Set(['demo-ecommerce', 'demo-saas', 'demo-blog']);
+
 interface SecretBundle {
   password?: string;
   apiToken?: string;
@@ -64,41 +66,14 @@ function readJson<T>(storage: 'local' | 'session', key: string, fallback: T): T 
 }
 
 export function getDefaultConnections(): ConnectionConfig[] {
-  return [
-    {
-      id: 'demo-ecommerce',
-      name: 'EC Store Demo (SQLite WASM)',
-      dialect: 'sqlite',
-      transport: 'wasm',
-      sampleId: 'ecommerce',
-      color: '#0f766e',
-      createdAt: 1,
-    },
-    {
-      id: 'demo-saas',
-      name: 'SaaS Workspace (SQLite WASM)',
-      dialect: 'sqlite',
-      transport: 'wasm',
-      sampleId: 'saas',
-      color: '#0284c7',
-      createdAt: 2,
-    },
-    {
-      id: 'demo-blog',
-      name: 'Blog CMS (SQLite WASM)',
-      dialect: 'sqlite',
-      transport: 'wasm',
-      sampleId: 'blog',
-      color: '#b45309',
-      createdAt: 3,
-    },
-  ];
+  return [];
 }
 
 export function loadConnections(): ConnectionConfig[] {
   const saved = readJson<ConnectionConfig[]>('local', KEYS.connections, []);
   const sessionSecrets = readJson<Record<string, SecretBundle>>('session', KEYS.sessionSecrets, {});
-  const list = saved.length > 0 ? saved : getDefaultConnections();
+  // Strip any legacy sample DB entries cached in localStorage
+  const list = saved.filter((c) => !LEGACY_DEMO_IDS.has(c.id));
 
   return list.map((conn) => {
     const sec = sessionSecrets[conn.id];
@@ -175,46 +150,24 @@ export function loadSnippets(): SqlSnippet[] {
   if (saved.length > 0) return saved;
   return [
     {
-      id: 'snip-1',
-      title: 'Top Customers by Order Revenue',
-      dialect: 'all',
-      sql: `SELECT
-  c.full_name,
-  c.tier,
-  COUNT(o.id) AS orders_count,
-  COALESCE(SUM(o.total_jpy), 0) AS lifetime_jpy
-FROM customers c
-LEFT JOIN orders o ON o.customer_id = c.id
-GROUP BY c.id
-ORDER BY lifetime_jpy DESC;`,
+      id: 'snip-tables-sqlite',
+      title: 'List Tables (SQLite / D1)',
+      dialect: 'sqlite',
+      sql: `SELECT name, type\nFROM sqlite_master\nWHERE type IN ('table', 'view')\nORDER BY type, name;`,
       createdAt: 1,
     },
     {
-      id: 'snip-2',
-      title: 'Monthly Sales Breakdown (Chart Ready)',
-      dialect: 'all',
-      sql: `SELECT
-  substr(ordered_at, 1, 7) AS month,
-  COUNT(*) AS orders,
-  SUM(total_jpy) AS revenue_jpy
-FROM orders
-GROUP BY substr(ordered_at, 1, 7)
-ORDER BY month ASC;`,
+      id: 'snip-tables-pg',
+      title: 'List Tables (PostgreSQL)',
+      dialect: 'postgresql',
+      sql: `SELECT table_schema, table_name\nFROM information_schema.tables\nWHERE table_schema NOT IN ('pg_catalog', 'information_schema')\nORDER BY table_schema, table_name;`,
       createdAt: 2,
     },
     {
-      id: 'snip-3',
-      title: 'Products & Category Inventory',
-      dialect: 'all',
-      sql: `SELECT
-  p.sku,
-  p.name,
-  c.name AS category,
-  p.price_jpy,
-  p.stock
-FROM products p
-JOIN categories c ON c.id = p.category_id
-ORDER BY p.price_jpy DESC;`,
+      id: 'snip-tables-mysql',
+      title: 'Table Sizes (MySQL / MariaDB)',
+      dialect: 'mysql',
+      sql: `SELECT table_name, table_rows, round((data_length + index_length) / 1024 / 1024, 2) AS size_mb\nFROM information_schema.tables\nWHERE table_schema = DATABASE()\nORDER BY size_mb DESC;`,
       createdAt: 3,
     },
   ];

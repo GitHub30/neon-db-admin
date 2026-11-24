@@ -43,14 +43,22 @@ npx wrangler deploy
 
 ### PHP Proxy (`proxy.php`)
 ```bash
+# Quick start (NEON_DB_PROXY_TOKEN is optional)
+php -S 127.0.0.1:8080 public/proxies/proxy.php
+
+# Optional token authentication (recommended for public servers)
 export NEON_DB_PROXY_TOKEN="$(openssl rand -hex 32)"
 export NEON_DB_SQLITE_DIR="/var/data/sqlite"
-php -S 127.0.0.1:8080 public/proxies/proxy.php
+php -S 0.0.0.0:8080 public/proxies/proxy.php
 ```
 
 ### Node.js Proxy (`proxy-node.mjs`)
 ```bash
 npm i mysql2 pg
+# Quick start (NEON_DB_PROXY_TOKEN is optional)
+PORT=8787 node public/proxies/proxy-node.mjs
+
+# Optional token authentication (recommended for shared/public networks)
 NEON_DB_PROXY_TOKEN="$(openssl rand -hex 32)" PORT=8787 node public/proxies/proxy-node.mjs
 ```
 

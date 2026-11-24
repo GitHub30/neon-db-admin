@@ -21,11 +21,12 @@
     "php": {
       "download_url": "https://github30.github.io/neon-db-admin/proxies/proxy.php",
       "cors": "Access-Control-Allow-Origin: *",
-      "requires_token": true
+      "requires_token": false
     },
     "nodejs": {
       "download_url": "https://github30.github.io/neon-db-admin/proxies/proxy-node.mjs",
-      "cors": "Access-Control-Allow-Origin: *"
+      "cors": "Access-Control-Allow-Origin: *",
+      "requires_token": false
     }
   },
   "features": [

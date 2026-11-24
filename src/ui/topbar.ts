@@ -8,7 +8,6 @@ import { icon } from './icons.js';
 export interface TopbarCallbacks {
   onOpenConnections: () => void;
   onUploadSqlite: () => void;
-  onOpenProxyGuide: () => void;
   onOpenCommandPalette: () => void;
   onInstallPwa?: () => void;
   canInstallPwa: () => boolean;
@@ -78,17 +77,6 @@ export function renderTopbar(container: HTMLElement, cb: TopbarCallbacks): void 
       },
       icon('upload', 14),
       t('uploadSqlite')
-    ),
-    el(
-      'button',
-      {
-        type: 'button',
-        id: 'btn-proxy-guide',
-        className: 'btn btn-sm hide-sm',
-        onClick: cb.onOpenProxyGuide,
-      },
-      icon('server', 14),
-      t('proxySetup')
     ),
     el(
       'button',

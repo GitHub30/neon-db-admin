@@ -23,7 +23,7 @@ export interface ConnectionConfig {
   apiToken?: string;
   authToken?: string;
   rememberSecrets?: boolean;
-  sampleId?: 'ecommerce' | 'saas' | 'blog' | 'empty';
+  sampleId?: 'empty';
   color?: string;
   createdAt: number;
 }

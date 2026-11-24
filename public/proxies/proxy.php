@@ -1,14 +1,18 @@
 <?php
 /**
- * Neon DB Admin — Hardened Single-File PHP Database Proxy (v1.1.0)
+ * Neon DB Admin — Single-File PHP Database Proxy (v1.2.0)
  *
  * Supported Databases: MySQL, MariaDB, PostgreSQL, SQLite (via PHP PDO)
  * CORS: Access-Control-Allow-Origin: * (configurable via NEON_DB_ALLOWED_ORIGIN)
  *
- * SECURITY SETUP (REQUIRED BEFORE DEPLOYING):
- *   1. Set NEON_DB_PROXY_TOKEN (>= 16 random chars, e.g. `openssl rand -hex 32`).
- *   2. Place NEON_DB_SQLITE_DIR outside your webroot (and set PHP open_basedir).
- *   3. Serve over HTTPS in production.
+ * Usage:
+ *   # Quick start (no token required):
+ *   php -S 127.0.0.1:8080 proxy.php
+ *
+ *   # Recommended for public internet servers (optional token auth):
+ *   export NEON_DB_PROXY_TOKEN="$(openssl rand -hex 32)"
+ *   export NEON_DB_SQLITE_DIR="/var/data/sqlite"
+ *   php -S 0.0.0.0:8080 proxy.php
  */
 
 declare(strict_types=1);
@@ -19,12 +23,11 @@ ini_set('html_errors', '0');
 error_reporting(0);
 
 // ============================================================================
-// Configuration
+// Configuration (NEON_DB_PROXY_TOKEN is optional; leave empty to disable auth)
 // ============================================================================
-$PROXY_TOKEN        = getenv('NEON_DB_PROXY_TOKEN') ?: 'CHANGE_ME_BEFORE_USE';
+$PROXY_TOKEN        = getenv('NEON_DB_PROXY_TOKEN') ?: '';
 $ALLOWED_ORIGIN     = getenv('NEON_DB_ALLOWED_ORIGIN') ?: '*';
-$ALLOW_OPEN_LOCAL   = (getenv('NEON_DB_ALLOW_LOCAL_NO_AUTH') === '1');
-$SQLITE_ALLOWED_DIR = getenv('NEON_DB_SQLITE_DIR') ?: __DIR__ . '/databases';
+$SQLITE_ALLOWED_DIR = getenv('NEON_DB_SQLITE_DIR') ?: __DIR__;
 $MAX_ROWS           = min(max((int)(getenv('NEON_DB_MAX_ROWS') ?: 5000), 1), 10000);
 $MAX_BODY_BYTES     = 2 * 1024 * 1024; // 2 MB
 $QUERY_TIMEOUT_SEC  = min(max((int)(getenv('NEON_DB_TIMEOUT_SEC') ?: 15), 1), 60);
@@ -45,7 +48,7 @@ function emitHeaders(string $origin): void
     header('Content-Type: application/json; charset=utf-8');
     header('X-Content-Type-Options: nosniff');
     header('Cache-Control: no-store');
-    header('X-Proxy-Version: 1.1.0');
+    header('X-Proxy-Version: 1.2.0');
 }
 
 emitHeaders($ALLOWED_ORIGIN);
@@ -122,11 +125,11 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') {
         'service' => 'neon-db-admin-proxy',
         'runtime' => 'php-pdo',
         'phpVersion' => PHP_VERSION,
-        'version' => '1.1.0',
+        'version' => '1.2.0',
         'cors' => $ALLOWED_ORIGIN,
         'supportedDialects' => detectSupportedDialects(),
-        'authRequired' => !$ALLOW_OPEN_LOCAL,
-        'configured' => ($PROXY_TOKEN !== 'CHANGE_ME_BEFORE_USE' && strlen($PROXY_TOKEN) >= 16) || $ALLOW_OPEN_LOCAL,
+        'authRequired' => ($PROXY_TOKEN !== ''),
+        'configured' => true,
     ]);
 }
 
@@ -135,26 +138,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
 }
 
 // ============================================================================
-// Authentication (Fail-Closed + Loopback-Only Open-Local Guard)
+// Optional Authentication (enforced only when NEON_DB_PROXY_TOKEN is set)
 // ============================================================================
-$remoteAddr = (string)($_SERVER['REMOTE_ADDR'] ?? '');
-$isLoopback = in_array($remoteAddr, ['127.0.0.1', '::1'], true);
-
-if ($ALLOW_OPEN_LOCAL) {
-    if (!$isLoopback) {
-        sendJson(['ok' => false, 'error' => 'Forbidden: NEON_DB_ALLOW_LOCAL_NO_AUTH is restricted to loopback clients only.'], 403);
-    }
-    if ($ALLOWED_ORIGIN === '*') {
-        sendJson(['ok' => false, 'error' => 'Misconfigured: set explicit NEON_DB_ALLOWED_ORIGIN when using NEON_DB_ALLOW_LOCAL_NO_AUTH=1.'], 503);
-    }
-} else {
-    if ($PROXY_TOKEN === 'CHANGE_ME_BEFORE_USE' || strlen($PROXY_TOKEN) < 16) {
-        sendJson([
-            'ok' => false,
-            'error' => 'Proxy is not configured. Set NEON_DB_PROXY_TOKEN (at least 16 characters) in proxy.php or environment variables.',
-        ], 503);
-    }
-
+if ($PROXY_TOKEN !== '') {
     $provided = readAuthToken();
     if ($provided === '' || !hash_equals($PROXY_TOKEN, $provided)) {
         sendJson(['ok' => false, 'error' => 'Unauthorized: invalid or missing proxy token.'], 401);
@@ -228,7 +214,6 @@ function resolveSafeSqlitePath(string $requestedPath, string $allowedDir): strin
         ? $requestedPath
         : $realAllowed . DIRECTORY_SEPARATOR . ltrim($requestedPath, '/\\');
 
-    // Reject symlinks (including dangling symlinks) before resolving
     if (is_link($candidate)) {
         throw new RuntimeException('Access denied: symbolic links are not permitted for SQLite paths.');
     }
@@ -251,9 +236,6 @@ function resolveSafeSqlitePath(string $requestedPath, string $allowedDir): strin
     return $realTarget;
 }
 
-/**
- * Strips SQL string literals, quoted identifiers, and comments to inspect executable SQL keywords safely.
- */
 function stripSqlLiteralsAndComments(string $sql): string
 {
     $len = strlen($sql);
@@ -305,10 +287,6 @@ function assertSafeSqliteSql(string $sql): void
     }
 }
 
-/**
- * Rewrites PostgreSQL $1, $2, ... positional placeholders (outside strings, identifiers, dollar-quotes, comments)
- * into PDO named parameters :p1, :p2, ...
- */
 function rewritePgPlaceholdersForPdo(string $sql): string
 {
     $len = strlen($sql);
@@ -317,7 +295,6 @@ function rewritePgPlaceholdersForPdo(string $sql): string
     while ($i < $len) {
         $ch = $sql[$i];
         $next = $i + 1 < $len ? $sql[$i + 1] : '';
-        // Line comment
         if ($ch === '-' && $next === '-') {
             $nl = strpos($sql, "\n", $i + 2);
             $end = $nl === false ? $len : $nl + 1;
@@ -325,7 +302,6 @@ function rewritePgPlaceholdersForPdo(string $sql): string
             $i = $end;
             continue;
         }
-        // Block comment
         if ($ch === '/' && $next === '*') {
             $pos = strpos($sql, '*/', $i + 2);
             $end = $pos === false ? $len : $pos + 2;
@@ -333,7 +309,6 @@ function rewritePgPlaceholdersForPdo(string $sql): string
             $i = $end;
             continue;
         }
-        // Single or double quoted literal/identifier
         if ($ch === "'" || $ch === '"') {
             $q = $ch;
             $start = $i;
@@ -352,7 +327,6 @@ function rewritePgPlaceholdersForPdo(string $sql): string
             $out .= substr($sql, $start, $i - $start);
             continue;
         }
-        // Dollar-quoted literal $tag$...$tag$
         if ($ch === '$' && preg_match('/^\$[A-Za-z_0-9]*\$/', substr($sql, $i), $dm)) {
             $tag = $dm[0];
             $close = strpos($sql, $tag, $i + strlen($tag));
@@ -361,7 +335,6 @@ function rewritePgPlaceholdersForPdo(string $sql): string
             $i = $end;
             continue;
         }
-        // Positional placeholder $1, $2, ...
         if ($ch === '$' && preg_match('/^\$(\d+)/', substr($sql, $i), $pm)) {
             $out .= ':p' . $pm[1];
             $i += strlen($pm[0]);
@@ -466,7 +439,6 @@ function runStatement(PDO $pdo, string $dialect, string $sql, array $params, int
 
     $started = microtime(true);
     if (count($params) === 0) {
-        // Use query() for non-parameterized SQL so MySQL DDL / utility statements don't hit Error 1295
         $stmt = $pdo->query($sql);
     } elseif ($dialect === 'postgresql' && preg_match('/\$\d+/', $sql)) {
         $rewritten = rewritePgPlaceholdersForPdo($sql);

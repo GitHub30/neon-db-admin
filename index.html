@@ -113,7 +113,7 @@
               {
                 "@type": "HowToStep",
                 "name": "proxy.php または proxy-node.mjs で社内・ローカルDBへ接続する",
-                "text": "「プロキシ設定 / ダウンロード」から proxy.php または proxy-node.mjs をダウンロードし、認証トークン (NEON_DB_PROXY_TOKEN) を設定してサーバーへ配置後、プロキシURLを指定して接続します。"
+                "text": "「接続管理」内の「プロキシ設定 / ダウンロード」タブから proxy.php または proxy-node.mjs をダウンロードしてサーバーへ配置し、プロキシURLを指定して接続します（認証トークン NEON_DB_PROXY_TOKEN は任意）。"
               }
             ]
           },
@@ -194,12 +194,29 @@
             <button type="button" role="tab" id="tab-data" class="ws-tab" aria-selected="true" aria-controls="workspace-content">データ閲覧・編集</button>
           </div>
           <div id="workspace-content" class="workspace-content" role="tabpanel" aria-labelledby="tab-data">
-            <div class="panel-scroll">
-              <div class="card">
-                <h1 style="margin: 0 0 6px; font-size: 1.15rem; font-weight: 700;">Neon DB Admin ワークベンチへようこそ</h1>
-                <p style="margin: 0; color: var(--ink-secondary); font-size: 0.84rem;">
-                  SQLiteファイルの直接編集（ブラウザWASM）から、Cloudflare Workers / proxy.php 経由の MySQL・MariaDB・PostgreSQL・Cloudflare D1 管理、MySQL Workbench 風 ER図作成まで1つで完結します。
-                </p>
+            <div class="empty-state">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+                <path d="M3 5V19A9 3 0 0 0 21 19V5"></path>
+                <path d="M3 12A9 3 0 0 0 21 12"></path>
+              </svg>
+              <h1 style="margin: 0; font-size: 1.15rem; font-weight: 700; color: var(--ink-primary);">データベースに接続して開始</h1>
+              <p style="margin: 0; max-width: 520px; font-size: 0.84rem; color: var(--ink-secondary);">
+                ローカルの SQLite ファイルを開くか、「接続管理」から MySQL・MariaDB・PostgreSQL・Cloudflare D1 へ接続してください。
+              </p>
+              <div class="toolbar-group" style="justify-content: center; margin-top: 4px;">
+                <button type="button" id="btn-open-conn-hero" class="btn btn-primary">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2" width="20" height="8" rx="2"></rect><rect x="2" y="14" width="20" height="8" rx="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+                  接続管理（リモートDB・プロキシ）
+                </button>
+                <button type="button" id="btn-upload-sqlite-hero" class="btn">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                  SQLiteファイルを開く
+                </button>
+                <button type="button" id="btn-new-sqlite-hero" class="btn">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                  新規SQLiteデータベース
+                </button>
               </div>
             </div>
           </div>

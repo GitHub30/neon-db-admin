@@ -15,6 +15,97 @@ export interface SidebarCallbacks {
 export function renderSidebar(container: HTMLElement, cb: SidebarCallbacks): void {
   container.className = `sidebar ${store.sidebarOpen ? 'open' : ''}`;
 
+  const activeConn = store.activeConnection;
+  const savedActiveConn = activeConn
+    ? store.connections.find((c) => c.id === activeConn.id)
+    : undefined;
+
+  // Compact Connection Switcher Dropdown (replaces multi-row connection list)
+  const connSelect = el(
+    'select',
+    {
+      id: 'sidebar-connection-select',
+      className: 'select select-sm',
+      style: { flex: '1', minWidth: '0', minHeight: '32px' },
+      'aria-label': t('connections'),
+      onChange: async (e: Event) => {
+        const id = (e.target as HTMLSelectElement).value;
+        if (!id) return;
+        const target = store.connections.find((c) => c.id === id);
+        if (!target || store.activeConnection?.id === target.id) return;
+        try {
+          await store.connectTo(target);
+          toast(`${target.name} に接続しました`, 'success', 2000);
+        } catch (err) {
+          toast(err instanceof Error ? err.message : String(err), 'error', 4500);
+          renderSidebar(container, cb);
+        }
+      },
+    },
+    ...(!activeConn
+      ? [
+          el(
+            'option',
+            { value: '', selected: true, disabled: store.connections.length > 0 },
+            store.connections.length === 0 ? '接続先なし（＋新規接続）' : '接続先を選択...'
+          ),
+        ]
+      : []),
+    ...(activeConn && !savedActiveConn
+      ? [
+          el(
+            'option',
+            { value: activeConn.id, selected: true },
+            `[${getDialectBadgeInfo(activeConn.dialect).label}] ${activeConn.name}`
+          ),
+        ]
+      : []),
+    ...store.connections.map((c) =>
+      el(
+        'option',
+        { value: c.id, selected: activeConn?.id === c.id },
+        `[${getDialectBadgeInfo(c.dialect).label}] ${c.name}`
+      )
+    )
+  );
+
+  const connDropdownRow = el(
+    'div',
+    { style: { display: 'flex', alignItems: 'center', gap: '4px' } },
+    connSelect,
+    savedActiveConn
+      ? el(
+          'button',
+          {
+            type: 'button',
+            className: 'btn btn-ghost btn-sm',
+            style: { padding: '2px 5px', minHeight: '28px', minWidth: '28px' },
+            title: '接続を編集',
+            'aria-label': `接続 ${savedActiveConn.name} を編集`,
+            onClick: () => cb.onOpenConnections(savedActiveConn),
+          },
+          icon('edit', 13)
+        )
+      : null,
+    savedActiveConn
+      ? el(
+          'button',
+          {
+            type: 'button',
+            className: 'btn btn-ghost btn-sm',
+            style: { padding: '2px 5px', minHeight: '28px', minWidth: '28px', color: 'var(--danger)' },
+            title: '接続を削除',
+            'aria-label': `接続 ${savedActiveConn.name} を削除`,
+            onClick: () => {
+              store.deleteConnection(savedActiveConn.id);
+              toast(`接続 "${savedActiveConn.name}" を削除しました`, 'info');
+            },
+          },
+          icon('trash', 13)
+        )
+      : null
+  );
+
   const searchInput = el('input', {
     type: 'search',
     className: 'input input-sm',
@@ -58,6 +149,7 @@ export function renderSidebar(container: HTMLElement, cb: SidebarCallbacks): voi
         icon('refresh', 14)
       )
     ),
+    connDropdownRow,
     searchInput
   );
 
@@ -69,77 +161,15 @@ export function renderSidebar(container: HTMLElement, cb: SidebarCallbacks): voi
     host.replaceChildren();
     const q = treeFilter.trim().toLowerCase();
 
-    // Saved Connections Switcher (with Edit & Delete buttons for custom connections — M6)
-    const connSection = el(
-      'div',
-      { className: 'tree-section' },
-      el('div', { className: 'tree-section-head' }, el('span', {}, t('connections')), el('span', {}, String(store.connections.length)))
-    );
-
-    for (const c of store.connections) {
-      const isActive = store.activeConnection?.id === c.id;
-      const badge = getDialectBadgeInfo(c.dialect);
-      const isCustom = !c.id.startsWith('demo-');
-      connSection.append(
-        el(
-          'div',
-          { style: { display: 'flex', alignItems: 'center', gap: '2px' } },
-          el(
-            'button',
-            {
-              type: 'button',
-              className: `tree-item ${isActive ? 'active' : ''}`,
-              style: { flex: '1', minWidth: '0' },
-              onClick: async () => {
-                if (isActive) return;
-                try {
-                  await store.connectTo(c);
-                  toast(`${c.name} に接続しました`, 'success', 2000);
-                } catch (err) {
-                  toast(err instanceof Error ? err.message : String(err), 'error', 4500);
-                }
-              },
-            },
-            el('span', { className: 'tree-item-main' }, icon('database', 14), el('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis' } }, c.name)),
-            el('span', { className: `badge ${badge.colorClass}` }, badge.label)
-          ),
-          isCustom
-            ? el(
-                'button',
-                {
-                  type: 'button',
-                  className: 'btn btn-ghost btn-sm',
-                  style: { padding: '2px 5px', minHeight: '28px', minWidth: '28px' },
-                  'aria-label': `接続 ${c.name} を編集`,
-                  onClick: () => cb.onOpenConnections(c),
-                },
-                icon('edit', 12)
-              )
-            : null,
-          isCustom
-            ? el(
-                'button',
-                {
-                  type: 'button',
-                  className: 'btn btn-ghost btn-sm',
-                  style: { padding: '2px 5px', minHeight: '28px', minWidth: '28px', color: 'var(--danger)' },
-                  'aria-label': `接続 ${c.name} を削除`,
-                  onClick: () => {
-                    store.deleteConnection(c.id);
-                    toast(`接続 "${c.name}" を削除しました`, 'info');
-                  },
-                },
-                icon('trash', 12)
-              )
-            : null
-        )
-      );
-    }
-    host.append(connSection);
-
     const schema = store.schema;
     if (!schema) {
-      host.append(el('div', { style: { padding: '12px', color: 'var(--ink-muted)', fontSize: '0.8rem' } }, store.loadingStatus || t('disconnected')));
+      host.append(
+        el(
+          'div',
+          { style: { padding: '12px', color: 'var(--ink-muted)', fontSize: '0.8rem' } },
+          store.loadingStatus || t('disconnected')
+        )
+      );
       return;
     }
 
@@ -166,6 +196,12 @@ export function renderSidebar(container: HTMLElement, cb: SidebarCallbacks): voi
         )
       )
     );
+
+    if (tables.length === 0) {
+      tableSection.append(
+        el('div', { style: { padding: '6px 8px', color: 'var(--ink-muted)', fontSize: '0.78rem' } }, 'テーブルはありません')
+      );
+    }
 
     for (const tbl of tables) {
       const isSelected = store.selectedTable === tbl.name;

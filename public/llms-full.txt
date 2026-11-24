@@ -12,8 +12,8 @@ Neon DB Admin is a static single-page Progressive Web App (PWA) written in stric
 - **Local SQLite (WASM)**: Runs `sql.js` inside a dedicated Web Worker (`sqlite-worker.ts`) so SQL execution and binary parsing never block the main UI thread. Users can drag-and-drop `.sqlite`, `.db`, `.sqlite3`, or `.db3` files directly into the browser, edit data or schemas, and export updated `.sqlite` binaries with zero server uploads.
 - **Remote Databases via Proxy**: Because web browsers cannot open raw TCP sockets or bypass CORS on cloud APIs like Cloudflare D1, Neon DB Admin communicates over a unified HTTPS JSON proxy protocol implemented across three runtimes:
   1. **Cloudflare Workers Proxy** (`workers/proxy-worker/`): Uses `nodejs_compat` (`mysql2`, `pg`), `cloudflare:sockets` TCP, and `fetch()` for Cloudflare D1 REST API, bound D1 (`env.DB`), and LibSQL/Turso Hrana HTTP v2 pipelines.
-  2. **PHP PDO Proxy** (`public/proxies/proxy.php`): Single-file zero-dependency PHP 8.1+ script using PDO (`pdo_mysql`, `pdo_pgsql`, `pdo_sqlite`) with `hash_equals` bearer token auth, `realpath` SQLite directory sandboxing, and `ATTR_EMULATE_PREPARES => false`.
-  3. **Node.js Proxy** (`public/proxies/proxy-node.mjs`): Standalone Node.js 22+ HTTP server using `node:sqlite`, `mysql2`, and `pg` for private/localhost development databases.
+  2. **PHP PDO Proxy** (`public/proxies/proxy.php`): Single-file zero-dependency PHP 8.1+ script using PDO (`pdo_mysql`, `pdo_pgsql`, `pdo_sqlite`) with optional `hash_equals` bearer token auth (`NEON_DB_PROXY_TOKEN`), `realpath` SQLite directory sandboxing, and `ATTR_EMULATE_PREPARES => false`.
+  3. **Node.js Proxy** (`public/proxies/proxy-node.mjs`): Standalone Node.js 22+ HTTP server using `node:sqlite`, `mysql2`, and `pg` for private/localhost development databases (optional `NEON_DB_PROXY_TOKEN`).
 
 ## 2. Supported Databases Matrix
 

@@ -17,7 +17,6 @@ interface BeforeInstallPromptEvent extends Event {
 }
 
 let deferredPrompt: BeforeInstallPromptEvent | null = null;
-let autoBootPromise: Promise<void> | null = null;
 let viewRenderToken = 0;
 
 function getHiddenSqliteInput(): HTMLInputElement {
@@ -47,16 +46,17 @@ function getHiddenSqliteInput(): HTMLInputElement {
   return inp;
 }
 
-async function ensureDefaultDemoConnected(): Promise<void> {
-  if (store.adapter) return;
-  if (!autoBootPromise) {
-    const demo = store.connections.find((c) => c.id === 'demo-ecommerce') || store.connections[0];
-    if (!demo) return;
-    autoBootPromise = store.connectTo(demo).finally(() => {
-      autoBootPromise = null;
-    });
-  }
-  await autoBootPromise;
+async function createAndConnectEmptySqlite(): Promise<void> {
+  const c: ConnectionConfig = {
+    id: `empty-${Date.now()}`,
+    name: 'New SQLite DB',
+    dialect: 'sqlite',
+    transport: 'wasm',
+    sampleId: 'empty',
+    createdAt: Date.now(),
+  };
+  store.upsertConnection(c);
+  await store.connectTo(c);
 }
 
 function applyHashRoute(): void {
@@ -67,137 +67,71 @@ function applyHashRoute(): void {
   }
 }
 
-function renderQuickStartHero(container: HTMLElement): void {
+function renderEmptyWorkbench(container: HTMLElement): void {
   const isEn = store.locale === 'en';
-  const demoCards = [
-    {
-      id: 'demo-ecommerce',
-      title: isEn ? 'E-Commerce Store (SQLite WASM)' : 'ECストア デモ (SQLite WASM)',
-      desc: isEn
-        ? '6 tables with foreign keys, views, and triggers. Try inline editing, SQL charts, and ER reverse engineering.'
-        : '6テーブル・外部キー・ビュー・トリガー付き。データ編集、SQL集計チャート、ER図リバース生成を即座に体験。',
-      badge: 'SQLite WASM',
-    },
-    {
-      id: 'demo-saas',
-      title: isEn ? 'SaaS Project Tracker (SQLite WASM)' : 'SaaSプロジェクト管理 (SQLite WASM)',
-      desc: isEn
-        ? 'Multi-tenant schema: organizations, users, projects, and issues.'
-        : 'organizations / users / projects / issues のマルチテナント設計サンプル。',
-      badge: 'SQLite WASM',
-    },
-    {
-      id: 'demo-blog',
-      title: isEn ? 'Blog CMS (SQLite WASM)' : 'ブログ CMS (SQLite WASM)',
-      desc: isEn
-        ? 'Many-to-many (N:M) ER relationship sample: posts ↔ post_tags ↔ tags.'
-        : 'N:M 多対多リレーション（posts ↔ post_tags ↔ tags）のER図サンプル。',
-      badge: 'SQLite WASM',
-    },
-  ];
-
   container.replaceChildren(
     el(
       'div',
-      { className: 'panel-scroll' },
+      { className: 'empty-state' },
+      icon('database', 36),
       el(
-        'div',
-        { className: 'card', style: { display: 'flex', flexDirection: 'column', gap: '12px' } },
-        el(
-          'div',
-          { style: { display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '10px' } },
-          el(
-            'div',
-            {},
-            el(
-              'h1',
-              { style: { margin: '0 0 4px', fontSize: '1.15rem', fontWeight: '700' } },
-              isEn ? 'Neon DB Admin — Universal Database Workbench' : 'Neon DB Admin ワークベンチへようこそ'
-            ),
-            el(
-              'p',
-              { style: { margin: '0', color: 'var(--ink-secondary)', fontSize: '0.84rem' } },
-              isEn
-                ? 'Edit local SQLite files offline via WebAssembly, connect to MySQL, MariaDB, PostgreSQL, and Cloudflare D1 through CORS-enabled proxies, and design Crow’s Foot ER diagrams.'
-                : 'SQLiteファイルの直接編集（ブラウザWASM）から、Cloudflare Workers / proxy.php 経由の MySQL・MariaDB・PostgreSQL・Cloudflare D1 管理、MySQL Workbench 風 ER図作成まで1つで完結します。'
-            )
-          ),
-          el(
-            'div',
-            { className: 'toolbar-group' },
-            el(
-              'button',
-              {
-                type: 'button',
-                id: 'btn-launch-demo',
-                className: 'btn btn-primary',
-                onClick: async () => {
-                  try {
-                    await ensureDefaultDemoConnected();
-                    toast('ECストア サンプルDB (SQLite WASM) を起動しました', 'success');
-                  } catch (err) {
-                    toast(err instanceof Error ? err.message : String(err), 'error', 5000);
-                  }
-                },
-              },
-              icon('play', 14),
-              isEn ? 'Launch Sample DB' : 'サンプルDBを今すぐ起動'
-            ),
-            el(
-              'button',
-              { type: 'button', className: 'btn', onClick: () => getHiddenSqliteInput().click() },
-              icon('upload', 14),
-              t('uploadSqlite')
-            ),
-            el(
-              'button',
-              {
-                type: 'button',
-                className: 'btn',
-                onClick: async () => {
-                  const { openConnectionModal } = await import('./ui/connection-modal.js');
-                  openConnectionModal();
-                },
-              },
-              icon('server', 14),
-              isEn ? 'Connect Remote DB' : 'リモートDB接続 (MySQL / PG / D1)'
-            )
-          )
-        ),
-        el(
-          'div',
-          { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px' } },
-          ...demoCards.map((d) =>
-            el(
-              'button',
-              {
-                type: 'button',
-                className: 'history-card',
-                style: { display: 'flex', flexDirection: 'column', gap: '6px', padding: '12px' },
-                onClick: async () => {
-                  const target = store.connections.find((c) => c.id === d.id);
-                  if (!target) return;
-                  try {
-                    await store.connectTo(target);
-                    toast(`${target.name} を起動しました`, 'success');
-                  } catch (err) {
-                    toast(err instanceof Error ? err.message : String(err), 'error', 5000);
-                  }
-                },
-              },
-              el('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' } }, el('strong', { style: { fontSize: '0.84rem' } }, d.title), el('span', { className: 'badge badge-sqlite' }, d.badge)),
-              el('span', { style: { fontSize: '0.78rem', color: 'var(--ink-secondary)', lineHeight: '1.5' } }, d.desc)
-            )
-          )
-        )
+        'h1',
+        { style: { margin: '0', fontSize: '1.15rem', fontWeight: '700', color: 'var(--ink-primary)' } },
+        isEn ? 'Connect to a Database' : 'データベースに接続して開始'
+      ),
+      el(
+        'p',
+        { style: { margin: '0', maxWidth: '520px', fontSize: '0.84rem', color: 'var(--ink-secondary)' } },
+        isEn
+          ? 'Open a local SQLite file (.sqlite / .db) or connect to MySQL, MariaDB, PostgreSQL, or Cloudflare D1 via Connection Manager.'
+          : 'ローカルの SQLite ファイルを開くか、「接続管理」から MySQL・MariaDB・PostgreSQL・Cloudflare D1 へ接続してください。'
       ),
       el(
         'div',
-        { className: 'card', style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' } },
-        el('div', {}, el('strong', { style: { display: 'block', marginBottom: '4px' } }, isEn ? 'Data Grid & Inline Edit' : 'データ閲覧 & インライン編集'), el('span', { style: { fontSize: '0.8rem', color: 'var(--ink-secondary)' } }, isEn ? 'Multi-filter WHERE builder, sorting, FK jump links, JSON inspector, and batch SQL commit.' : '複数条件フィルタ、並び替え、外部キーリンクジャンプ、セルJSONインスペクタ、SQLプレビュー付きバッチ保存。')),
-        el('div', {}, el('strong', { style: { display: 'block', marginBottom: '4px' } }, isEn ? 'SQL IDE & Charts' : 'SQL エディタ & チャート'), el('span', { style: { fontSize: '0.8rem', color: 'var(--ink-secondary)' } }, isEn ? 'Syntax highlighting, autocomplete, EXPLAIN plan, formatter, and Bar/Line/Pie charts.' : 'シンタックスハイライト、テーブル/カラム補完、EXPLAIN実行計画、SQL整形、結果の棒/折れ線/円グラフ可視化。')),
-        el('div', {}, el('strong', { style: { display: 'block', marginBottom: '4px' } }, isEn ? 'Visual ER Designer' : 'MySQL Workbench 風 ER図'), el('span', { style: { fontSize: '0.8rem', color: 'var(--ink-secondary)' } }, isEn ? 'Reverse engineer schemas, Crow’s Foot notation, forward DDL generation, SVG/PNG/Mermaid/DBML export.' : 'DBから自動リバース生成、Crow’s Foot記法、ドラッグ配置、DDLフォワード生成、SVG/PNG/Mermaid/DBML出力。')),
-        el('div', {}, el('strong', { style: { display: 'block', marginBottom: '4px' } }, isEn ? 'Universal Proxy Support' : 'マルチDB プロキシ接続'), el('span', { style: { fontSize: '0.8rem', color: 'var(--ink-secondary)' } }, isEn ? 'Built-in Cloudflare Workers proxy plus downloadable proxy.php and proxy-node.mjs with CORS (*).' : 'Cloudflare Workers プロキシ標準搭載。proxy.php / proxy-node.mjs も1クリックでダウンロード可能。'))
+        { className: 'toolbar-group', style: { justifyContent: 'center', marginTop: '4px' } },
+        el(
+          'button',
+          {
+            type: 'button',
+            id: 'btn-open-conn-hero',
+            className: 'btn btn-primary',
+            onClick: async () => {
+              const { openConnectionModal } = await import('./ui/connection-modal.js');
+              openConnectionModal();
+            },
+          },
+          icon('server', 14),
+          isEn ? 'Open Connection Manager' : '接続管理（リモートDB・プロキシ）'
+        ),
+        el(
+          'button',
+          {
+            type: 'button',
+            id: 'btn-upload-sqlite-hero',
+            className: 'btn',
+            onClick: () => getHiddenSqliteInput().click(),
+          },
+          icon('upload', 14),
+          t('uploadSqlite')
+        ),
+        el(
+          'button',
+          {
+            type: 'button',
+            id: 'btn-new-sqlite-hero',
+            className: 'btn',
+            onClick: async () => {
+              try {
+                await createAndConnectEmptySqlite();
+                toast('新規 SQLite データベースを作成しました', 'success');
+              } catch (err) {
+                toast(err instanceof Error ? err.message : String(err), 'error', 5000);
+              }
+            },
+          },
+          icon('plus', 14),
+          t('emptySqlite')
+        )
       )
     )
   );
@@ -214,14 +148,9 @@ function mountApp(): void {
   const statusEl = document.getElementById('app-statusbar');
   if (!topbarEl || !sidebarEl || !tabsEl || !contentEl || !statusEl) return;
 
-  const openConnections = async (editing?: ConnectionConfig) => {
+  const openConnections = async (editing?: ConnectionConfig, initialTab: 'connect' | 'proxy' = 'connect') => {
     const { openConnectionModal } = await import('./ui/connection-modal.js');
-    openConnectionModal(editing);
-  };
-
-  const openProxyGuide = async () => {
-    const { openProxyGuideModal } = await import('./ui/proxy-guide-modal.js');
-    openProxyGuideModal();
+    openConnectionModal(editing, initialTab);
   };
 
   const openPalette = async () => {
@@ -230,7 +159,11 @@ function mountApp(): void {
   };
 
   const openCreateTable = async () => {
-    await ensureDefaultDemoConnected();
+    if (!store.adapter) {
+      toast('先にデータベースへ接続するか、新規SQLiteを作成してください', 'info');
+      openConnections();
+      return;
+    }
     const { openCreateTableModal } = await import('./ui/table-designer.js');
     openCreateTableModal();
   };
@@ -247,11 +180,10 @@ function mountApp(): void {
   const renderAll = async (isInitialBoot = false) => {
     const token = ++viewRenderToken;
 
-    const renderChrome = () => {
+    const renderTopbarOnly = () => {
       renderTopbar(topbarEl, {
         onOpenConnections: () => openConnections(),
         onUploadSqlite: () => getHiddenSqliteInput().click(),
-        onOpenProxyGuide: openProxyGuide,
         onOpenCommandPalette: openPalette,
         canInstallPwa: () => deferredPrompt !== null,
         onInstallPwa: async () => {
@@ -262,8 +194,9 @@ function mountApp(): void {
           renderAll();
         },
       });
+    };
 
-      // Complete ARIA Tabs pattern: aria-controls, roving tabindex, ArrowLeft/Right, aria-labelledby on tabpanel (H11)
+    const renderTabsOnly = () => {
       contentEl.setAttribute('aria-labelledby', `tab-${store.activeView}`);
       tabsEl.replaceChildren(
         ...tabDefs.map((td, idx) => {
@@ -287,11 +220,8 @@ function mountApp(): void {
                   document.getElementById(`tab-${nextView}`)?.focus();
                 }
               },
-              onClick: async () => {
+              onClick: () => {
                 store.setActiveView(td.id);
-                if (!store.adapter && td.id !== 'import-export') {
-                  await ensureDefaultDemoConnected();
-                }
               },
             },
             icon(td.icon, 14),
@@ -301,10 +231,15 @@ function mountApp(): void {
       );
     };
 
+    const renderChrome = () => {
+      renderTopbarOnly();
+      renderTabsOnly();
+    };
+
     const renderPanels = async () => {
       if (token !== viewRenderToken) return;
       renderSidebar(sidebarEl, {
-        onOpenConnections: openConnections,
+        onOpenConnections: (editing) => openConnections(editing),
         onCreateTable: openCreateTable,
       });
 
@@ -313,7 +248,7 @@ function mountApp(): void {
         el(
           'div',
           { className: 'statusbar-group' },
-          el('span', {}, store.loadingStatus || (schema ? `${schema.serverVersion} · ${schema.databaseName}` : 'Ready (Click any demo DB or upload .sqlite)')),
+          el('span', {}, store.loadingStatus || (schema ? `${schema.serverVersion} · ${schema.databaseName}` : 'Ready')),
           schema ? el('span', { className: 'hide-sm' }, `${schema.tables.length} tables · ${schema.views.length} views · ${schema.triggers.length} triggers`) : null
         ),
         el(
@@ -324,8 +259,9 @@ function mountApp(): void {
         )
       );
 
-      if (!store.adapter && store.activeView !== 'import-export') {
-        renderQuickStartHero(contentEl);
+      // ER Designer and Import/Export work even before connecting to a DB
+      if (!store.adapter && store.activeView !== 'import-export' && store.activeView !== 'er') {
+        renderEmptyWorkbench(contentEl);
         return;
       }
 
@@ -364,20 +300,53 @@ function mountApp(): void {
     };
 
     if (isInitialBoot) {
-      renderChrome();
+      // Attach handlers to pre-rendered empty-state buttons in-place (zero reflow / zero CLS)
+      const bindStaticHero = () => {
+        if (store.activeView === 'er' || store.activeView === 'import-export') {
+          void renderPanels();
+          return;
+        }
+        const btnConn = document.getElementById('btn-open-conn-hero');
+        const btnUpload = document.getElementById('btn-upload-sqlite-hero');
+        const btnNew = document.getElementById('btn-new-sqlite-hero');
+        if (store.locale === 'ja' && btnConn && btnUpload && btnNew) {
+          btnConn.addEventListener('click', () => {
+            void openConnections();
+          });
+          btnUpload.addEventListener('click', () => {
+            getHiddenSqliteInput().click();
+          });
+          btnNew.addEventListener('click', async () => {
+            try {
+              await createAndConnectEmptySqlite();
+              toast('新規 SQLite データベースを作成しました', 'success');
+            } catch (err) {
+              toast(err instanceof Error ? err.message : String(err), 'error', 5000);
+            }
+          });
+        } else {
+          renderEmptyWorkbench(contentEl);
+        }
+      };
+
+      bindStaticHero();
       setTimeout(() => {
         if (token !== viewRenderToken) return;
-        renderQuickStartHero(contentEl);
+        renderTopbarOnly();
         setTimeout(() => {
           if (token !== viewRenderToken) return;
-          renderSidebar(sidebarEl, {
-            onOpenConnections: openConnections,
-            onCreateTable: openCreateTable,
-          });
-          statusEl.replaceChildren(
-            el('div', { className: 'statusbar-group' }, el('span', {}, 'Ready (Click any demo DB or upload .sqlite)')),
-            el('div', { className: 'statusbar-group' }, el('span', { className: 'hide-sm' }, 'CORS: *'), el('span', {}, t('offlineReady')))
-          );
+          renderTabsOnly();
+          setTimeout(() => {
+            if (token !== viewRenderToken) return;
+            renderSidebar(sidebarEl, {
+              onOpenConnections: (editing) => openConnections(editing),
+              onCreateTable: openCreateTable,
+            });
+            statusEl.replaceChildren(
+              el('div', { className: 'statusbar-group' }, el('span', {}, 'Ready')),
+              el('div', { className: 'statusbar-group' }, el('span', { className: 'hide-sm' }, 'CORS: *'), el('span', {}, t('offlineReady')))
+            );
+          }, 25);
         }, 20);
       }, 10);
     } else {
@@ -435,7 +404,9 @@ function mountApp(): void {
       }
     } else if (/\.sql$/i.test(file.name)) {
       const text = await file.text();
-      await ensureDefaultDemoConnected();
+      if (!store.adapter) {
+        await createAndConnectEmptySqlite();
+      }
       store.openSqlWithQuery(text);
       toast(`SQLファイル "${file.name}" をエディタに読み込みました`, 'success');
     }

@@ -23,16 +23,7 @@ const tabs: SqlTab[] = [
   {
     id: 'sql-1',
     title: 'Query 1',
-    sql: `-- Ctrl+Enter で実行 / Ctrl+Space で補完候補を表示
-SELECT
-  c.full_name,
-  c.tier,
-  COUNT(o.id) AS orders_count,
-  COALESCE(SUM(o.total_jpy), 0) AS total_spent_jpy
-FROM customers c
-LEFT JOIN orders o ON o.customer_id = c.id
-GROUP BY c.id
-ORDER BY total_spent_jpy DESC;`,
+    sql: `-- Ctrl+Enter で実行 / Ctrl+Space でテーブル・カラム補完\nSELECT 1 AS status;`,
     results: [],
     activeResultIdx: 0,
     resultMode: 'table',

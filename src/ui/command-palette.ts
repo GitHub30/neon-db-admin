@@ -2,7 +2,6 @@ import { store } from '../core/state.js';
 import { t } from '../i18n/translations.js';
 import { el, openModal } from './dom.js';
 import { openConnectionModal } from './connection-modal.js';
-import { openProxyGuideModal } from './proxy-guide-modal.js';
 
 interface CommandAction {
   label: string;
@@ -19,7 +18,7 @@ export function openCommandPalette(): void {
     { label: t('tabIo'), category: 'View', run: () => store.setActiveView('import-export') },
     { label: t('tabTools'), category: 'View', run: () => store.setActiveView('tools') },
     { label: t('newConnection'), category: 'Action', run: () => openConnectionModal() },
-    { label: t('proxySetup'), category: 'Action', run: () => openProxyGuideModal() },
+    { label: t('proxySetup'), category: 'Action', run: () => openConnectionModal(undefined, 'proxy') },
     { label: 'ライトモードに切替 (Light Mode)', category: 'Theme', run: () => store.setTheme('light') },
     { label: 'ダークモードに切替 (Dark Mode)', category: 'Theme', run: () => store.setTheme('dark') },
     { label: '日本語 / English 切替', category: 'Locale', run: () => store.setAppLocale(store.locale === 'ja' ? 'en' : 'ja') },

@@ -11,7 +11,7 @@ import type {
 } from '../types/db.js';
 import type { DatabaseAdapter } from './base.js';
 import { quoteIdent } from '../core/dialect.js';
-import { SAMPLE_DATABASES } from '../core/sample-dbs.js';
+import { EMPTY_SQLITE_INIT_SQL } from '../core/sample-dbs.js';
 
 interface PendingCall {
   resolve: (value: unknown) => void;
@@ -30,8 +30,7 @@ export class SqliteWasmAdapter implements DatabaseAdapter {
   constructor(config: ConnectionConfig, initialBytes?: Uint8Array) {
     this.config = config;
     this.initialBytes = initialBytes;
-    const sampleId = config.sampleId;
-    this.dbName = config.filePath || (sampleId ? SAMPLE_DATABASES[sampleId]?.name : undefined) || 'local.sqlite';
+    this.dbName = config.filePath || (config.sampleId === 'empty' ? 'new_database.sqlite' : 'local.sqlite');
   }
 
   private rejectAllPending(reason: string): void {
@@ -87,15 +86,12 @@ export class SqliteWasmAdapter implements DatabaseAdapter {
       return;
     }
 
-    if (!this.config.sampleId) {
+    if (this.config.sampleId !== 'empty') {
       throw new Error('ローカルSQLiteファイルのデータは再読み込み後に保持されません。ファイルを再度アップロードしてください。');
     }
 
     await this.callWorker({ type: 'init', wasmUrl });
-    const sample = SAMPLE_DATABASES[this.config.sampleId];
-    if (sample?.sql) {
-      await this.callWorker({ type: 'execScript', sql: sample.sql });
-    }
+    await this.callWorker({ type: 'execScript', sql: EMPTY_SQLITE_INIT_SQL });
   }
 
   async disconnect(): Promise<void> {
