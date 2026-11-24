@@ -2,6 +2,21 @@ import type { Locale } from '../types/db.js';
 
 export const DEFAULT_WORKER_PROXY_URL = 'https://neon-db-admin-proxy.6u.workers.dev';
 
+export interface LocaleOption {
+  code: Locale;
+  htmlLang: string;
+  label: string;
+  short: string;
+}
+
+export const LOCALE_OPTIONS: readonly LocaleOption[] = [
+  { code: 'ja', htmlLang: 'ja', label: '日本語', short: 'JA' },
+  { code: 'en', htmlLang: 'en', label: 'English', short: 'EN' },
+  { code: 'zh', htmlLang: 'zh-CN', label: '中文 (简体)', short: 'ZH' },
+  { code: 'ko', htmlLang: 'ko', label: '한국어', short: 'KO' },
+  { code: 'vi', htmlLang: 'vi', label: 'Tiếng Việt', short: 'VI' },
+] as const;
+
 const ja = {
   appName: 'Neon DB Admin',
   tagline: 'ユニバーサル データベース管理 & ER図デザイナー',
@@ -98,116 +113,90 @@ const ja = {
   schemaDiff: 'スキーマ差分 & マイグレーション',
   mockGenerator: 'テストデータ自動生成',
   ddlConverter: '方言間DDL変換',
+  toggleSidebar: 'サイドバー開閉',
+  selectLanguage: '言語を選択',
+  switchTheme: 'テーマ切替',
+  emptyHeroTitle: 'データベースに接続して開始',
+  emptyHeroDesc: 'ローカルの SQLite ファイルを開くか、「接続管理」から MySQL・MariaDB・PostgreSQL・Cloudflare D1 へ接続してください。',
+  openConnManagerBtn: '接続管理（リモートDB・プロキシ）',
+  noConnectionsOption: '接続先なし（＋新規接続）',
+  selectConnectionOption: '接続先を選択...',
+  editConnection: '接続を編集',
+  deleteConnection: '接続を削除',
+  noTables: 'テーブルはありません',
+  schemaRefreshed: 'スキーマを更新しました',
+  connectFirstHint: '先にデータベースへ接続するか、新規SQLiteを作成してください',
+  newSqliteCreated: '新規 SQLite データベースを作成しました',
+  connectingSuffix: 'に接続中...',
+  connectedSuffix: 'に接続しました',
+  connTabSettings: '接続設定',
+  connEditSuffix: '編集',
+  localSqliteTitle: 'ローカル SQLite (ブラウザ WASM)',
+  openSqliteFileBtn: 'SQLiteファイルを開く (.sqlite/.db)',
+  remoteDbTitle: 'リモートデータベース接続設定 (Cloudflare Workers / PHP / Node プロキシ)',
+  getProxyFilesBtn: 'proxy.php / proxy-node.mjs を取得',
+  connNameLabel: '接続名',
+  dialectLabel: 'データベース種別',
+  proxyMethodLabel: '接続プロキシ方式',
+  proxyUrlLabel: 'プロキシ URL',
+  proxyTokenLabel: 'プロキシ認証トークン (任意)',
+  proxyTokenPlaceholder: 'X-Proxy-Token (任意 — 未設定でも利用可能)',
+  connUrlLabel: '接続文字列 URL (任意・入力するとホスト等を上書き)',
+  sqlitePathLabel: 'サーバー上の SQLite ファイルパス (SQLITE_ALLOWED_DIR内)',
+  d1BindingNote: 'セルフホストした Cloudflare Worker に `[[d1_databases]] binding = "DB"` がバインドされている場合、追加の認証情報なしでクエリできます。',
+  sslEnableLabel: 'SSL / TLS 暗号化通信を有効にする（推奨）',
+  sslSelfSignedLabel: '自己署名証明書を許可する（開発用・非推奨）',
+  rememberSecretsLabel: '認証情報をローカルに永続保存する（未チェック時はタブ終了で消去）',
+  purgeSecretsBtn: '保存済み秘密情報を全消去',
+  secretsPurgedToast: '保存された認証情報およびメモリ上の秘密情報をすべて消去しました',
+  testConnectionBtn: '接続テスト',
+  saveAndConnectBtn: '保存して接続',
+  testingConnStatus: '接続テスト実行中...',
+  connTestSuccess: '接続成功',
+  connTestError: '接続エラー',
+  proxyStatusChecking: 'ステータス確認中...',
+  proxyStatusLive: '稼働中',
+  proxyStatusOffline: 'オフライン / 到達不可',
+  proxyCardWorkerTitle: '1. Cloudflare Workers プロキシ（全リモートDB対応）',
+  proxyCardWorkerDesc: 'Cloudflare Workers の TCP Socket と Fetch API により、MySQL / MariaDB / PostgreSQL / Cloudflare D1 / LibSQL へ CORS (Access-Control-Allow-Origin: *) 対応で接続できます。',
+  copyUrlBtn: 'URLをコピー',
+  proxyCardPhpTitle: '2. シングルファイル PHP プロキシ (proxy.php)',
+  proxyCardPhpDesc: '依存関係ゼロの PHP PDO プロキシ。MySQL / MariaDB / PostgreSQL / SQLite に対応。NEON_DB_PROXY_TOKEN は任意（未設定のまま配置しても動作します）。Access-Control-Allow-Origin: * 標準対応。',
+  downloadPhpBtn: 'proxy.php をダウンロード',
+  proxyCardNodeTitle: '3. スタンドアロン Node.js プロキシ (proxy-node.mjs)',
+  proxyCardNodeDesc: 'ローカル環境や社内ネットワークのDB向け軽量 Node.js 22+ プロキシ。NEON_DB_PROXY_TOKEN は任意（未設定でも動作します）。',
+  downloadNodeBtn: 'proxy-node.mjs をダウンロード',
+  cmdSearchPlaceholder: 'テーブル名・機能・テーマ・言語を検索...',
+  cmdLightMode: 'ライトモードに切替 (Light Mode)',
+  cmdDarkMode: 'ダークモードに切替 (Dark Mode)',
+  proxyOptWorker: 'Cloudflare Workers プロキシ (CORS対応・ライブ利用可)',
+  proxyOptPhp: 'PHP プロキシ (proxy.php)',
+  proxyOptNode: 'Node.js プロキシ (proxy-node.mjs)',
+  dropTableTitle: 'テーブル削除',
 } as const;
-
-const en: Record<keyof typeof ja, string> = {
-  appName: 'Neon DB Admin',
-  tagline: 'Universal Database Manager & Visual ER Designer',
-  connect: 'Connections',
-  newConnection: 'New Connection',
-  uploadSqlite: 'Open SQLite File',
-  proxySetup: 'Proxy Setup / Download',
-  commandPalette: 'Command Palette',
-  docsFaq: 'Docs / FAQ',
-  installPwa: 'Install App',
-  themeLight: 'Light',
-  themeDark: 'Dark',
-  themeSystem: 'System',
-  searchObjects: 'Filter tables, views...',
-  connections: 'Connections',
-  tables: 'Tables',
-  views: 'Views',
-  triggers: 'Triggers',
-  indexes: 'Indexes',
-  foreignKeys: 'Foreign Keys',
-  refresh: 'Refresh',
-  createTable: 'Create Table',
-  tabData: 'Data Grid',
-  tabSql: 'SQL Editor',
-  tabStructure: 'Structure & DDL',
-  tabEr: 'ER Diagram',
-  tabIo: 'Import / Export',
-  tabTools: 'DB Tools',
-  runQuery: 'Run (Ctrl+Enter)',
-  runSelected: 'Run Selection',
-  explainQuery: 'Explain Plan',
-  formatSql: 'Format SQL',
-  saveSnippet: 'Save Snippet',
-  clear: 'Clear',
-  history: 'Query History',
-  snippets: 'Saved Snippets',
-  results: 'Results',
-  chartView: 'Chart View',
-  tableView: 'Table View',
-  addRow: 'Insert Row',
-  deleteSelected: 'Delete Selected',
-  commitChanges: 'Commit Changes',
-  discardChanges: 'Discard',
-  previewSql: 'Preview SQL',
-  filter: 'Filter',
-  addFilter: 'Add Condition',
-  applyFilter: 'Apply',
-  resetFilter: 'Reset',
-  quickSearch: 'Quick search...',
-  rowsPerPage: 'Page size',
-  prevPage: 'Prev',
-  nextPage: 'Next',
-  exportCsv: 'CSV',
-  exportJson: 'JSON',
-  exportSql: 'SQL INSERT',
-  exportMarkdown: 'Markdown',
-  exportSqlite: 'Save .sqlite',
-  noTableSelected: 'Select a table from the sidebar or run a query in the SQL Editor.',
-  cellInspector: 'Cell Inspector',
-  setNull: 'Set NULL',
-  saveCell: 'Apply',
-  cancel: 'Cancel',
-  confirm: 'Execute',
-  close: 'Close',
-  erReverse: 'Reverse Engineer DB',
-  erForward: 'Forward Engineer DDL',
-  erAddTable: 'Add Table',
-  erAddRelation: 'Add Relation',
-  erAutoLayout: 'Auto Layout',
-  erFitView: 'Fit View',
-  erExportSvg: 'Export SVG',
-  erExportPng: 'Export PNG',
-  erExportMermaid: 'Mermaid',
-  erExportDbml: 'DBML',
-  erExportSql: 'SQL DDL',
-  erSaveModel: 'Save Model',
-  erLoadModel: 'Load Model',
-  connected: 'Connected',
-  disconnected: 'Disconnected',
-  loading: 'Loading...',
-  rows: 'rows',
-  affected: 'affected',
-  ms: 'ms',
-  offlineReady: 'Offline Ready (PWA)',
-  dropSqliteHint: 'Drop a .sqlite / .db / .sql file anywhere to open',
-  destructiveTitle: 'Confirm Destructive Operation',
-  destructiveDesc: 'This action modifies or deletes database records/objects. Please review the SQL below.',
-  copied: 'Copied to clipboard',
-  saved: 'Saved successfully',
-  deleted: 'Deleted successfully',
-  emptySqlite: 'New Empty SQLite Database',
-  serverInfo: 'Server Info & Variables',
-  healthCheck: 'Schema Health Audit',
-  schemaDiff: 'Schema Diff & Migration',
-  mockGenerator: 'Mock Data Generator',
-  ddlConverter: 'Cross-Dialect DDL Converter',
-};
 
 export type TranslationKey = keyof typeof ja;
 
-const dict: Record<Locale, Record<TranslationKey, string>> = { ja, en };
+const dict: Partial<Record<Locale, Record<TranslationKey, string>>> = { ja };
 
 let currentLocale: Locale = 'ja';
+let extraLoaded = false;
+
+export async function ensureLocaleLoaded(locale: Locale): Promise<void> {
+  if (locale === 'ja' || extraLoaded) return;
+  const mod = await import('./locales-extra.js');
+  Object.assign(dict, mod.EXTRA_LOCALES);
+  extraLoaded = true;
+}
+
+export function getLocaleOption(locale: Locale = currentLocale): LocaleOption {
+  return LOCALE_OPTIONS.find((o) => o.code === locale) ?? LOCALE_OPTIONS[0];
+}
 
 export function setLocale(locale: Locale): void {
   currentLocale = locale;
   if (typeof document !== 'undefined') {
-    document.documentElement.lang = locale;
+    document.documentElement.lang = getLocaleOption(locale).htmlLang;
   }
 }
 
@@ -216,5 +205,5 @@ export function getLocale(): Locale {
 }
 
 export function t(key: TranslationKey): string {
-  return dict[currentLocale][key] ?? dict.ja[key] ?? key;
+  return dict[currentLocale]?.[key] ?? ja[key] ?? key;
 }

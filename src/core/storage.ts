@@ -197,7 +197,7 @@ export function saveTheme(mode: ThemeMode): void {
 
 export function loadLocale(): Locale {
   const val = safeGet('local', KEYS.locale);
-  if (val === 'ja' || val === 'en') return val;
+  if (val === 'ja' || val === 'en' || val === 'zh' || val === 'ko' || val === 'vi') return val;
   return 'ja';
 }
 

@@ -21,18 +21,18 @@ export function openConnectionModal(editing?: ConnectionConfig, initialTab: 'con
   let activeTab: 'connect' | 'proxy' = initialTab;
 
   openModal({
-    title: editing ? `${t('connect')} — 編集` : t('connect'),
+    title: editing ? `${t('connect')} — ${t('connEditSuffix')}` : t('connect'),
     large: true,
     renderBody: (body, close) => {
       const renderModalContent = () => {
         body.replaceChildren();
 
-        // Modal tab bar: 接続設定 | プロキシ設定 / ダウンロード
+        // Modal tab bar: Connection Settings | Proxy Setup / Download
         const tabBar = el(
           'div',
           {
             role: 'tablist',
-            'aria-label': '接続管理タブ',
+            'aria-label': t('connect'),
             style: { display: 'flex', gap: '6px', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '10px' },
           },
           el(
@@ -48,7 +48,7 @@ export function openConnectionModal(editing?: ConnectionConfig, initialTab: 'con
               },
             },
             icon('database', 13),
-            '接続設定'
+            t('connTabSettings')
           ),
           el(
             'button',
@@ -95,12 +95,12 @@ export function openConnectionModal(editing?: ConnectionConfig, initialTab: 'con
         const quickBox = el(
           'div',
           { className: 'card', style: { background: 'var(--bg-subtle)' } },
-          el('div', { style: { fontWeight: '700', fontSize: '0.84rem', marginBottom: '8px' } }, 'ローカル SQLite (ブラウザ WASM)'),
+          el('div', { style: { fontWeight: '700', fontSize: '0.84rem', marginBottom: '8px' } }, t('localSqliteTitle')),
           el(
             'div',
             { className: 'toolbar-group' },
             fileInp,
-            el('button', { type: 'button', className: 'btn btn-sm btn-primary', onClick: () => fileInp.click() }, icon('upload', 13), 'SQLiteファイルを開く (.sqlite/.db)'),
+            el('button', { type: 'button', className: 'btn btn-sm btn-primary', onClick: () => fileInp.click() }, icon('upload', 13), t('openSqliteFileBtn')),
             el(
               'button',
               {
@@ -118,7 +118,7 @@ export function openConnectionModal(editing?: ConnectionConfig, initialTab: 'con
                   store.upsertConnection(c);
                   await store.connectTo(c);
                   close();
-                  toast('新規 SQLite データベースを作成しました', 'success');
+                  toast(t('newSqliteCreated'), 'success');
                 },
               },
               icon('plus', 13),
@@ -173,9 +173,9 @@ export function openConnectionModal(editing?: ConnectionConfig, initialTab: 'con
               renderModalContent();
             },
           },
-          el('option', { value: 'cloudflare-worker', selected: draft.transport === 'cloudflare-worker' }, 'Cloudflare Workers プロキシ (CORS対応・ライブ利用可)'),
-          el('option', { value: 'php-proxy', selected: draft.transport === 'php-proxy' }, 'PHP プロキシ (proxy.php)'),
-          el('option', { value: 'node-proxy', selected: draft.transport === 'node-proxy' }, 'Node.js プロキシ (proxy-node.mjs)')
+          el('option', { value: 'cloudflare-worker', selected: draft.transport === 'cloudflare-worker' }, t('proxyOptWorker')),
+          el('option', { value: 'php-proxy', selected: draft.transport === 'php-proxy' }, t('proxyOptPhp')),
+          el('option', { value: 'node-proxy', selected: draft.transport === 'node-proxy' }, t('proxyOptNode'))
         );
 
         const nameInp = el('input', {
@@ -202,7 +202,7 @@ export function openConnectionModal(editing?: ConnectionConfig, initialTab: 'con
           type: 'password',
           className: 'input mono',
           value: draft.proxyToken || '',
-          placeholder: 'X-Proxy-Token (任意 — 未設定でも利用可能)',
+          placeholder: t('proxyTokenPlaceholder'),
           onInput: (e: Event) => {
             draft.proxyToken = (e.target as HTMLInputElement).value;
           },
@@ -216,7 +216,7 @@ export function openConnectionModal(editing?: ConnectionConfig, initialTab: 'con
               'div',
               { className: 'field-row' },
               labeledField(
-                'Cloudflare Account ID (32桁Hex)',
+                'Cloudflare Account ID (32-hex)',
                 el('input', {
                   type: 'text',
                   className: 'input mono',
@@ -241,7 +241,7 @@ export function openConnectionModal(editing?: ConnectionConfig, initialTab: 'con
               )
             ),
             labeledField(
-              'Cloudflare API Token (D1 Edit 権限付き)',
+              'Cloudflare API Token (D1 Edit)',
               el('input', {
                 type: 'password',
                 className: 'input mono',
@@ -254,7 +254,7 @@ export function openConnectionModal(editing?: ConnectionConfig, initialTab: 'con
           );
         } else if (draft.dialect === 'd1-binding') {
           specificFields.append(
-            el('p', { style: { margin: '0', fontSize: '0.82rem', color: 'var(--ink-secondary)' } }, 'セルフホストした Cloudflare Worker に `[[d1_databases]] binding = "DB"` がバインドされている場合、追加の認証情報なしでクエリできます。')
+            el('p', { style: { margin: '0', fontSize: '0.82rem', color: 'var(--ink-secondary)' } }, t('d1BindingNote'))
           );
         } else if (draft.dialect === 'libsql') {
           specificFields.append(
@@ -285,7 +285,7 @@ export function openConnectionModal(editing?: ConnectionConfig, initialTab: 'con
         } else if (draft.dialect === 'sqlite') {
           specificFields.append(
             labeledField(
-              'サーバー上の SQLite ファイルパス (SQLITE_ALLOWED_DIR内)',
+              t('sqlitePathLabel'),
               el('input', {
                 type: 'text',
                 className: 'input mono',
@@ -300,7 +300,7 @@ export function openConnectionModal(editing?: ConnectionConfig, initialTab: 'con
         } else {
           specificFields.append(
             labeledField(
-              '接続文字列 URL (任意・入力するとホスト等を上書き)',
+              t('connUrlLabel'),
               el('input', {
                 type: 'password',
                 className: 'input mono',
@@ -389,7 +389,7 @@ export function openConnectionModal(editing?: ConnectionConfig, initialTab: 'con
                     draft.ssl = (e.target as HTMLInputElement).checked;
                   },
                 }),
-                'SSL / TLS 暗号化通信を有効にする（推奨）'
+                t('sslEnableLabel')
               ),
               el(
                 'label',
@@ -401,7 +401,7 @@ export function openConnectionModal(editing?: ConnectionConfig, initialTab: 'con
                     draft.sslRejectUnauthorized = !(e.target as HTMLInputElement).checked;
                   },
                 }),
-                '自己署名証明書を許可する（開発用・非推奨）'
+                t('sslSelfSignedLabel')
               )
             )
           );
@@ -424,7 +424,7 @@ export function openConnectionModal(editing?: ConnectionConfig, initialTab: 'con
             el(
               'div',
               { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px' } },
-              el('span', { style: { fontWeight: '700', fontSize: '0.86rem' } }, 'リモートデータベース接続設定 (Cloudflare Workers / PHP / Node プロキシ)'),
+              el('span', { style: { fontWeight: '700', fontSize: '0.86rem' } }, t('remoteDbTitle')),
               el(
                 'button',
                 {
@@ -436,17 +436,17 @@ export function openConnectionModal(editing?: ConnectionConfig, initialTab: 'con
                   },
                 },
                 icon('download', 12),
-                'proxy.php / proxy-node.mjs を取得'
+                t('getProxyFilesBtn')
               )
             ),
-            el('div', { className: 'field-row' }, labeledField('接続名', nameInp), labeledField('データベース種別', dialectSel)),
-            el('div', { className: 'field-row' }, labeledField('接続プロキシ方式', transportSel), labeledField('プロキシ URL', proxyUrlInp)),
-            labeledField('プロキシ認証トークン (任意)', proxyTokenInp),
+            el('div', { className: 'field-row' }, labeledField(t('connNameLabel'), nameInp), labeledField(t('dialectLabel'), dialectSel)),
+            el('div', { className: 'field-row' }, labeledField(t('proxyMethodLabel'), transportSel), labeledField(t('proxyUrlLabel'), proxyUrlInp)),
+            labeledField(t('proxyTokenLabel'), proxyTokenInp),
             specificFields,
             el(
               'div',
               { style: { display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '8px', paddingTop: '6px', borderTop: '1px solid var(--border-subtle)' } },
-              el('label', { style: { display: 'inline-flex', gap: '6px', alignItems: 'center', fontSize: '0.78rem', color: 'var(--ink-secondary)' } }, rememberChk, '認証情報をローカルに永続保存する（未チェック時はタブ終了で消去）'),
+              el('label', { style: { display: 'inline-flex', gap: '6px', alignItems: 'center', fontSize: '0.78rem', color: 'var(--ink-secondary)' } }, rememberChk, t('rememberSecretsLabel')),
               el(
                 'button',
                 {
@@ -455,11 +455,11 @@ export function openConnectionModal(editing?: ConnectionConfig, initialTab: 'con
                   style: { color: 'var(--danger)' },
                   onClick: () => {
                     store.purgeAllSecrets();
-                    toast('保存された認証情報およびメモリ上の秘密情報をすべて消去しました', 'info');
+                    toast(t('secretsPurgedToast'), 'info');
                   },
                 },
                 icon('shield', 12),
-                '保存済み秘密情報を全消去'
+                t('purgeSecretsBtn')
               )
             ),
             testStatus,
@@ -472,20 +472,20 @@ export function openConnectionModal(editing?: ConnectionConfig, initialTab: 'con
                   type: 'button',
                   className: 'btn',
                   onClick: async () => {
-                    testStatus.textContent = '接続テスト実行中...';
+                    testStatus.textContent = t('testingConnStatus');
                     testStatus.style.color = 'var(--ink-muted)';
                     const adapter = new ProxyDatabaseAdapter(draft);
                     const res = await adapter.testConnection();
                     if (res.ok) {
-                      testStatus.textContent = `接続成功: ${res.version} (${res.durationMs}ms)`;
+                      testStatus.textContent = `${t('connTestSuccess')}: ${res.version} (${res.durationMs}ms)`;
                       testStatus.style.color = 'var(--success)';
                     } else {
-                      testStatus.textContent = `接続エラー: ${res.error}`;
+                      testStatus.textContent = `${t('connTestError')}: ${res.error}`;
                       testStatus.style.color = 'var(--danger)';
                     }
                   },
                 },
-                '接続テスト'
+                t('testConnectionBtn')
               ),
               el(
                 'button',
@@ -498,13 +498,13 @@ export function openConnectionModal(editing?: ConnectionConfig, initialTab: 'con
                     try {
                       await store.connectTo({ ...draft });
                       close();
-                      toast(`${draft.name} に接続しました`, 'success');
+                      toast(`${draft.name} ${t('connectedSuffix')}`, 'success');
                     } catch (err) {
                       toast(err instanceof Error ? err.message : String(err), 'error', 5000);
                     }
                   },
                 },
-                '保存して接続'
+                t('saveAndConnectBtn')
               )
             )
           )

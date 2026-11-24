@@ -161,7 +161,7 @@ export interface ERModel {
 
 export type ActiveView = 'data' | 'sql' | 'structure' | 'er' | 'import-export' | 'tools';
 export type ThemeMode = 'light' | 'dark' | 'system';
-export type Locale = 'ja' | 'en';
+export type Locale = 'ja' | 'en' | 'zh' | 'ko' | 'vi';
 
 export interface FilterRule {
   id: string;

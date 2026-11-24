@@ -20,7 +20,7 @@ Inspired by **phpMyAdmin**, **MySQL Workbench**, **DB Browser for SQLite**, **Ad
 - **Multi-Tab SQL IDE:** Syntax highlighting, schema-aware autocomplete (`Ctrl+Space`), `Ctrl+Enter` execution, `EXPLAIN` plan, SQL formatter, query history, saved snippets, and interactive SVG charts (Bar / Line / Pie).
 - **MySQL Workbench-Style Visual ER Diagram Designer:** Reverse engineering from active DB, Crow's Foot notation (`1:1`, `1:N`, `N:M`), drag/snap/pan/pointer-zoom canvas, topological auto-layout, forward engineering DDL generation, and SVG / 2x PNG / Mermaid / DBML / `.er.json` export.
 - **Table Designer & Power Tools:** Create/Alter table, index & FK management, cross-dialect DDL converter, schema health audit, schema diff migration generator, smart mock data generator, SQL dump & auto-typed CSV/TSV/JSON import.
-- **Modern UX & Web Standards:** Light/Dark/System theme, JA/EN localization, `Ctrl+K` Command Palette, full offline PWA, SEO/AEO/GEO/AIO/LLMO compliance, and Lighthouse 100 across Mobile & Desktop.
+- **Modern UX & Web Standards:** Light/Dark/System theme, JA/EN/ZH/KO/VI localization with flag dropdown, `Ctrl+K` Command Palette, full offline PWA, SEO/AEO/GEO/AIO/LLMO compliance, and Lighthouse 100 across Mobile & Desktop.
 
 ## Local Development & Testing
 

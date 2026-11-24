@@ -25,7 +25,7 @@ import {
   saveTheme,
   scrubSecretsFromConnection,
 } from './storage.js';
-import { setLocale } from '../i18n/translations.js';
+import { ensureLocaleLoaded, setLocale, t } from '../i18n/translations.js';
 
 export type StateListener = () => void;
 
@@ -53,6 +53,9 @@ class AppStore {
 
   constructor() {
     setLocale(this.locale);
+    if (this.locale !== 'ja') {
+      void ensureLocaleLoaded(this.locale).then(() => this.notify());
+    }
   }
 
   subscribe(listener: StateListener): () => void {
@@ -83,7 +86,8 @@ class AppStore {
     }
   }
 
-  setAppLocale(locale: Locale): void {
+  async setAppLocale(locale: Locale): Promise<void> {
+    await ensureLocaleLoaded(locale);
     this.locale = locale;
     setLocale(locale);
     saveLocale(locale);
@@ -187,7 +191,7 @@ class AppStore {
 
   async connectTo(conn: ConnectionConfig, binaryBytes?: Uint8Array): Promise<void> {
     const mySeq = ++this.connectSeq;
-    this.loadingStatus = `${conn.name} に接続中...`;
+    this.loadingStatus = `${conn.name} ${t('connectingSuffix')}`;
     this.notify();
 
     let nextAdapter: DatabaseAdapter | null = null;

@@ -35,7 +35,7 @@ export function renderSidebar(container: HTMLElement, cb: SidebarCallbacks): voi
         if (!target || store.activeConnection?.id === target.id) return;
         try {
           await store.connectTo(target);
-          toast(`${target.name} に接続しました`, 'success', 2000);
+          toast(`${target.name} ${t('connectedSuffix')}`, 'success', 2000);
         } catch (err) {
           toast(err instanceof Error ? err.message : String(err), 'error', 4500);
           renderSidebar(container, cb);
@@ -47,7 +47,7 @@ export function renderSidebar(container: HTMLElement, cb: SidebarCallbacks): voi
           el(
             'option',
             { value: '', selected: true, disabled: store.connections.length > 0 },
-            store.connections.length === 0 ? '接続先なし（＋新規接続）' : '接続先を選択...'
+            store.connections.length === 0 ? t('noConnectionsOption') : t('selectConnectionOption')
           ),
         ]
       : []),
@@ -80,8 +80,8 @@ export function renderSidebar(container: HTMLElement, cb: SidebarCallbacks): voi
             type: 'button',
             className: 'btn btn-ghost btn-sm',
             style: { padding: '2px 5px', minHeight: '28px', minWidth: '28px' },
-            title: '接続を編集',
-            'aria-label': `接続 ${savedActiveConn.name} を編集`,
+            title: t('editConnection'),
+            'aria-label': `${t('editConnection')}: ${savedActiveConn.name}`,
             onClick: () => cb.onOpenConnections(savedActiveConn),
           },
           icon('edit', 13)
@@ -94,11 +94,11 @@ export function renderSidebar(container: HTMLElement, cb: SidebarCallbacks): voi
             type: 'button',
             className: 'btn btn-ghost btn-sm',
             style: { padding: '2px 5px', minHeight: '28px', minWidth: '28px', color: 'var(--danger)' },
-            title: '接続を削除',
-            'aria-label': `接続 ${savedActiveConn.name} を削除`,
+            title: t('deleteConnection'),
+            'aria-label': `${t('deleteConnection')}: ${savedActiveConn.name}`,
             onClick: () => {
               store.deleteConnection(savedActiveConn.id);
-              toast(`接続 "${savedActiveConn.name}" を削除しました`, 'info');
+              toast(`${savedActiveConn.name}: ${t('deleted')}`, 'info');
             },
           },
           icon('trash', 13)
@@ -140,7 +140,7 @@ export function renderSidebar(container: HTMLElement, cb: SidebarCallbacks): voi
           onClick: async () => {
             try {
               await store.refreshSchema();
-              toast('スキーマを更新しました', 'success', 1800);
+              toast(t('schemaRefreshed'), 'success', 1800);
             } catch (err) {
               toast(err instanceof Error ? err.message : String(err), 'error');
             }
@@ -199,7 +199,7 @@ export function renderSidebar(container: HTMLElement, cb: SidebarCallbacks): voi
 
     if (tables.length === 0) {
       tableSection.append(
-        el('div', { style: { padding: '6px 8px', color: 'var(--ink-muted)', fontSize: '0.78rem' } }, 'テーブルはありません')
+        el('div', { style: { padding: '6px 8px', color: 'var(--ink-muted)', fontSize: '0.78rem' } }, t('noTables'))
       );
     }
 
@@ -227,7 +227,7 @@ export function renderSidebar(container: HTMLElement, cb: SidebarCallbacks): voi
               className: 'btn btn-ghost btn-sm',
               style: { padding: '2px 5px', minHeight: '28px', minWidth: '28px' },
               title: `SELECT * FROM ${tbl.name}`,
-              'aria-label': `${tbl.name} のSELECTクエリを開く`,
+              'aria-label': `SELECT * FROM ${tbl.name}`,
               onClick: () => store.openSqlWithQuery(generateSelectSql(tbl.name, schema.dialect, { limit: 100 }) + ';'),
             },
             icon('code', 12)
@@ -239,15 +239,15 @@ export function renderSidebar(container: HTMLElement, cb: SidebarCallbacks): voi
               className: 'btn btn-ghost btn-sm',
               style: { padding: '2px 5px', minHeight: '28px', minWidth: '28px', color: 'var(--danger)' },
               title: `DROP TABLE ${tbl.name}`,
-              'aria-label': `${tbl.name} を削除`,
+              'aria-label': `DROP TABLE ${tbl.name}`,
               onClick: async () => {
                 const sql = `DROP TABLE ${quoteIdent(tbl.name, schema.dialect)};`;
-                const ok = await confirmSqlModal({ title: `テーブル "${tbl.name}" を削除`, sql, danger: true });
+                const ok = await confirmSqlModal({ title: `${t('dropTableTitle')}: ${tbl.name}`, sql, danger: true });
                 if (!ok || !store.adapter) return;
                 try {
                   await store.adapter.query(sql);
                   await store.refreshSchema();
-                  toast(`テーブル "${tbl.name}" を削除しました`, 'success');
+                  toast(`${tbl.name}: ${t('deleted')}`, 'success');
                 } catch (err) {
                   toast(err instanceof Error ? err.message : String(err), 'error');
                 }

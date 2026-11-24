@@ -1,9 +1,9 @@
 import { store } from '../core/state.js';
 import { getDialectBadgeInfo } from '../core/dialect.js';
-import { t } from '../i18n/translations.js';
+import { getLocaleOption, LOCALE_OPTIONS, t } from '../i18n/translations.js';
 import type { ThemeMode } from '../types/db.js';
 import { el } from './dom.js';
-import { icon } from './icons.js';
+import { flagIcon, icon } from './icons.js';
 
 export interface TopbarCallbacks {
   onOpenConnections: () => void;
@@ -13,9 +13,15 @@ export interface TopbarCallbacks {
   canInstallPwa: () => boolean;
 }
 
+let cleanupLocaleListeners: (() => void) | null = null;
+
 export function renderTopbar(container: HTMLElement, cb: TopbarCallbacks): void {
+  cleanupLocaleListeners?.();
+  cleanupLocaleListeners = null;
+
   const conn = store.activeConnection;
   const badgeInfo = conn ? getDialectBadgeInfo(conn.dialect) : null;
+  const currentLoc = getLocaleOption(store.locale);
 
   const cycleTheme = () => {
     const order: ThemeMode[] = ['light', 'dark', 'system'];
@@ -34,7 +40,7 @@ export function renderTopbar(container: HTMLElement, cb: TopbarCallbacks): void 
       {
         type: 'button',
         className: 'btn btn-ghost btn-icon mobile-menu-btn',
-        'aria-label': 'サイドバー開閉',
+        'aria-label': t('toggleSidebar'),
         'aria-expanded': String(store.sidebarOpen),
         onClick: () => {
           store.sidebarOpen = !store.sidebarOpen;
@@ -63,6 +69,130 @@ export function renderTopbar(container: HTMLElement, cb: TopbarCallbacks): void 
       badgeInfo ? el('span', { className: `badge ${badgeInfo.colorClass} hide-sm` }, badgeInfo.label) : null
     )
   );
+
+  // Flag Language Dropdown (accessible custom listbox with inline SVG flags)
+  let menuOpen = false;
+  const localeMenu = el('div', {
+    id: 'locale-dropdown-menu',
+    className: 'locale-menu',
+    role: 'listbox',
+    'aria-label': t('selectLanguage'),
+    hidden: true,
+  });
+
+  const localeTrigger = el(
+    'button',
+    {
+      type: 'button',
+      id: 'btn-locale-toggle',
+      className: 'btn btn-ghost btn-sm topbar-action-btn locale-trigger',
+      'aria-label': `${t('selectLanguage')}: ${currentLoc.label}`,
+      'aria-haspopup': 'listbox',
+      'aria-expanded': 'false',
+      'aria-controls': 'locale-dropdown-menu',
+      title: `${t('selectLanguage')} (${currentLoc.label})`,
+    },
+    flagIcon(currentLoc.code, 20, 14),
+    el('span', {}, currentLoc.short),
+    icon('chevronDown', 14)
+  );
+
+  const optionButtons: HTMLButtonElement[] = [];
+  let menuPopulated = false;
+
+  const ensureMenuPopulated = () => {
+    if (menuPopulated) return;
+    menuPopulated = true;
+    LOCALE_OPTIONS.forEach((opt, idx) => {
+      const isSelected = opt.code === store.locale;
+      const btn = el(
+        'button',
+        {
+          type: 'button',
+          role: 'option',
+          className: 'locale-option',
+          'aria-selected': String(isSelected),
+          dataset: { locale: opt.code },
+          onClick: async () => {
+            setMenuOpen(false);
+            if (opt.code !== store.locale) {
+              await store.setAppLocale(opt.code);
+            }
+            document.getElementById('btn-locale-toggle')?.focus();
+          },
+          onKeydown: (e: KeyboardEvent) => {
+            if (e.key === 'ArrowDown') {
+              e.preventDefault();
+              optionButtons[(idx + 1) % optionButtons.length]?.focus();
+            } else if (e.key === 'ArrowUp') {
+              e.preventDefault();
+              optionButtons[(idx - 1 + optionButtons.length) % optionButtons.length]?.focus();
+            } else if (e.key === 'Home') {
+              e.preventDefault();
+              optionButtons[0]?.focus();
+            } else if (e.key === 'End') {
+              e.preventDefault();
+              optionButtons[optionButtons.length - 1]?.focus();
+            } else if (e.key === 'Escape') {
+              e.preventDefault();
+              setMenuOpen(false);
+              localeTrigger.focus();
+            }
+          },
+        },
+        el('span', { className: 'locale-option-main' }, flagIcon(opt.code, 20, 14), el('span', {}, opt.label)),
+        isSelected ? icon('check', 14) : null
+      );
+      optionButtons.push(btn);
+      localeMenu.append(btn);
+    });
+  };
+
+  const setMenuOpen = (open: boolean, focusSelected = false) => {
+    if (open) ensureMenuPopulated();
+    menuOpen = open;
+    localeMenu.hidden = !open;
+    localeTrigger.setAttribute('aria-expanded', String(open));
+    if (open && focusSelected) {
+      const selectedIdx = LOCALE_OPTIONS.findIndex((o) => o.code === store.locale);
+      optionButtons[Math.max(0, selectedIdx)]?.focus();
+    }
+  };
+
+  localeTrigger.addEventListener('click', (e: Event) => {
+    e.stopPropagation();
+    setMenuOpen(!menuOpen, false);
+  });
+
+  localeTrigger.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      setMenuOpen(true, true);
+    } else if (e.key === 'Escape' && menuOpen) {
+      e.preventDefault();
+      setMenuOpen(false);
+    }
+  });
+
+  const localeDropdown = el('div', { className: 'locale-dropdown' }, localeTrigger, localeMenu);
+
+  const onDocPointerDown = (e: Event) => {
+    if (menuOpen && !localeDropdown.contains(e.target as Node)) {
+      setMenuOpen(false);
+    }
+  };
+  const onDocKeyDown = (e: KeyboardEvent) => {
+    if (menuOpen && e.key === 'Escape') {
+      setMenuOpen(false);
+      localeTrigger.focus();
+    }
+  };
+  document.addEventListener('pointerdown', onDocPointerDown);
+  document.addEventListener('keydown', onDocKeyDown);
+  cleanupLocaleListeners = () => {
+    document.removeEventListener('pointerdown', onDocPointerDown);
+    document.removeEventListener('keydown', onDocKeyDown);
+  };
 
   const right = el(
     'div',
@@ -103,26 +233,15 @@ export function renderTopbar(container: HTMLElement, cb: TopbarCallbacks): void 
           t('installPwa')
         )
       : null,
-    el(
-      'button',
-      {
-        type: 'button',
-        id: 'btn-locale-toggle',
-        className: 'btn btn-ghost btn-sm topbar-action-btn',
-        'aria-label': '言語切替 (JA / EN)',
-        onClick: () => store.setAppLocale(store.locale === 'ja' ? 'en' : 'ja'),
-      },
-      icon('globe', 14),
-      store.locale.toUpperCase()
-    ),
+    localeDropdown,
     el(
       'button',
       {
         type: 'button',
         id: 'btn-theme-toggle',
         className: 'btn btn-ghost btn-sm topbar-action-btn',
-        'aria-label': `テーマ切替 (${themeLabel})`,
-        title: `Theme: ${themeLabel}`,
+        'aria-label': `${t('switchTheme')} (${themeLabel})`,
+        title: `${t('switchTheme')}: ${themeLabel}`,
         onClick: cycleTheme,
       },
       icon(themeIcon, 15),

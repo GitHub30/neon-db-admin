@@ -2,7 +2,7 @@
 
 > Browser-based universal database management tool and MySQL Workbench-style visual ER diagram designer deployed on GitHub Pages. Supports SQLite (in-browser WebAssembly), MySQL, MariaDB, PostgreSQL, Cloudflare D1, and LibSQL/Turso via CORS-enabled Cloudflare Workers, PHP PDO (`proxy.php`), and Node.js (`proxy-node.mjs`) proxies.
 
-Neon DB Admin combines capabilities from phpMyAdmin, Adminer, DB Browser for SQLite, MySQL Workbench, pgAdmin, DBeaver, and DbGate inside a fast, offline-ready Progressive Web App (PWA) with Light/Dark mode and bilingual Japanese/English UI.
+Neon DB Admin combines capabilities from phpMyAdmin, Adminer, DB Browser for SQLite, MySQL Workbench, pgAdmin, DBeaver, and DbGate inside a fast, offline-ready Progressive Web App (PWA) with Light/Dark mode and multilingual UI (Japanese, English, Chinese, Korean, and Vietnamese).
 
 ## Documentation
 

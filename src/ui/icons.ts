@@ -36,7 +36,8 @@ export type IconName =
   | 'zoomIn'
   | 'zoomOut'
   | 'maximize'
-  | 'globe';
+  | 'globe'
+  | 'chevronDown';
 
 const PATHS: Record<IconName, string> = {
   database: 'M12 3C7.58 3 4 4.34 4 6v12c0 1.66 3.58 3 8 3s8-1.34 8-3V6c0-1.66-3.58-3-8-3zm0 2c3.87 0 6 .96 6 1s-2.13 1-6 1-6-.96-6-1 2.13-1 6-1zm0 14c-3.87 0-6-.96-6-1v-3.1c1.47.69 3.63 1.1 6 1.1s4.53-.41 6-1.1V18c0 .04-2.13 1-6 1zm0-5c-3.87 0-6-.96-6-1V9.9c1.47.69 3.63 1.1 6 1.1s4.53-.41 6-1.1V13c0 .04-2.13 1-6 1z',
@@ -77,20 +78,43 @@ const PATHS: Record<IconName, string> = {
   zoomOut: 'M10 3a7 7 0 1 0 4.3 12.5l4.6 4.6 1.4-1.4-4.6-4.6A7 7 0 0 0 10 3zM7 9h6v2H7V9z',
   maximize: 'M4 4h6v2H6v4H4V4zm10 0h6v6h-2V6h-4V4zM4 14h2v4h4v2H4v-6zm14 4v-4h2v6h-6v-2h4z',
   globe: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm7.9 9h-3.1a15 15 0 0 0-1.3-5A8 8 0 0 1 19.9 11zM12 4.1c1 1.3 1.9 3.7 2.2 6.9H9.8c.3-3.2 1.2-5.6 2.2-6.9zM4.1 13h3.1c.2 1.8.6 3.5 1.3 5A8 8 0 0 1 4.1 13zm3.1-2H4.1a8 8 0 0 1 4.4-5 15 15 0 0 0-1.3 5zm4.8 8.9c-1-1.3-1.9-3.7-2.2-6.9h4.4c-.3 3.2-1.2 5.6-2.2 6.9zm3.5-1.9c.7-1.5 1.1-3.2 1.3-5h3.1a8 8 0 0 1-4.4 5z',
+  chevronDown: 'M7 10l5 5 5-5H7z',
 };
 
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+function svgNode<K extends keyof SVGElementTagNameMap>(
+  tag: K,
+  attrs: Record<string, string | number>
+): SVGElementTagNameMap[K] {
+  const el = document.createElementNS(SVG_NS, tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    el.setAttribute(k, String(v));
+  }
+  return el;
+}
+
+function starPoints(cx: number, cy: number, outerR: number, innerR: number): string {
+  const pts: string[] = [];
+  for (let i = 0; i < 10; i++) {
+    const r = i % 2 === 0 ? outerR : innerR;
+    const angle = (Math.PI / 5) * i - Math.PI / 2;
+    pts.push(`${(cx + r * Math.cos(angle)).toFixed(2)},${(cy + r * Math.sin(angle)).toFixed(2)}`);
+  }
+  return pts.join(' ');
+}
+
 export function icon(name: IconName, size = 15): SVGSVGElement {
-  const ns = 'http://www.w3.org/2000/svg';
-  const svg = document.createElementNS(ns, 'svg');
-  svg.setAttribute('width', String(size));
-  svg.setAttribute('height', String(size));
-  svg.setAttribute('viewBox', '0 0 24 24');
-  svg.setAttribute('fill', 'currentColor');
-  svg.setAttribute('aria-hidden', 'true');
+  const svg = svgNode('svg', {
+    width: size,
+    height: size,
+    viewBox: '0 0 24 24',
+    fill: 'currentColor',
+    'aria-hidden': 'true',
+  });
   svg.style.flexShrink = '0';
 
-  const path = document.createElementNS(ns, 'path');
-  path.setAttribute('d', PATHS[name] || PATHS.database);
+  const path = svgNode('path', { d: PATHS[name] || PATHS.database });
   if (name === 'diagram') {
     path.setAttribute('fill', 'none');
     path.setAttribute('stroke', 'currentColor');
@@ -99,5 +123,92 @@ export function icon(name: IconName, size = 15): SVGSVGElement {
     path.setAttribute('stroke-linejoin', 'round');
   }
   svg.appendChild(path);
+  return svg;
+}
+
+/**
+ * Crisp inline SVG country flags (renders consistently on Windows, macOS, Linux, iOS, and Android).
+ */
+export function flagIcon(locale: 'ja' | 'en' | 'zh' | 'ko' | 'vi', width = 20, height = 14): SVGSVGElement {
+  const svg = svgNode('svg', {
+    width,
+    height,
+    viewBox: '0 0 24 16',
+    class: 'flag-icon',
+    'aria-hidden': 'true',
+  });
+
+  if (locale === 'ja') {
+    svg.append(
+      svgNode('rect', { width: 24, height: 16, fill: '#ffffff' }),
+      svgNode('circle', { cx: 12, cy: 8, r: 4.5, fill: '#bc002d' })
+    );
+  } else if (locale === 'en') {
+    svg.append(svgNode('rect', { width: 24, height: 16, fill: '#ffffff' }));
+    for (let i = 0; i < 7; i++) {
+      svg.append(svgNode('rect', { x: 0, y: (i * 16) / 13 * 2, width: 24, height: 16 / 13 + 0.05, fill: '#b22234' }));
+    }
+    svg.append(svgNode('rect', { x: 0, y: 0, width: 10.6, height: 8.65, fill: '#3c3b6e' }));
+    for (let row = 0; row < 3; row++) {
+      for (let col = 0; col < 4; col++) {
+        svg.append(
+          svgNode('circle', {
+            cx: 1.55 + col * 2.5,
+            cy: 1.65 + row * 2.65,
+            r: 0.55,
+            fill: '#ffffff',
+          })
+        );
+      }
+    }
+  } else if (locale === 'zh') {
+    svg.append(
+      svgNode('rect', { width: 24, height: 16, fill: '#de2910' }),
+      svgNode('polygon', { points: starPoints(4.8, 4.8, 2.35, 0.92), fill: '#ffde00' }),
+      svgNode('polygon', { points: starPoints(9.2, 2.1, 0.85, 0.34), fill: '#ffde00' }),
+      svgNode('polygon', { points: starPoints(10.8, 3.8, 0.85, 0.34), fill: '#ffde00' }),
+      svgNode('polygon', { points: starPoints(10.8, 6.1, 0.85, 0.34), fill: '#ffde00' }),
+      svgNode('polygon', { points: starPoints(9.2, 7.8, 0.85, 0.34), fill: '#ffde00' })
+    );
+  } else if (locale === 'ko') {
+    svg.append(
+      svgNode('rect', { width: 24, height: 16, fill: '#ffffff' }),
+      // Taegeuk (red upper swirl + blue lower swirl)
+      svgNode('circle', { cx: 12, cy: 8, r: 3.7, fill: '#0047a0' }),
+      svgNode('path', { d: 'M8.3 8 A3.7 3.7 0 0 1 15.7 8 A1.85 1.85 0 0 0 12 8 A1.85 1.85 0 0 1 8.3 8 Z', fill: '#cd2e3a' }),
+      // Four trigrams (simplified crisp strokes)
+      svgNode('path', {
+        d: 'M4.2 4.6 L6.8 2.4 M5.1 5.6 L7.7 3.4 M6.0 6.6 L8.6 4.4',
+        stroke: '#111827',
+        'stroke-width': 0.85,
+        fill: 'none',
+      }),
+      svgNode('path', {
+        d: 'M17.2 2.4 L19.8 4.6 M16.3 3.4 L18.9 5.6 M15.4 4.4 L18.0 6.6',
+        stroke: '#111827',
+        'stroke-width': 0.85,
+        fill: 'none',
+      }),
+      svgNode('path', {
+        d: 'M4.2 11.4 L6.8 13.6 M5.1 10.4 L7.7 12.6 M6.0 9.4 L8.6 11.6',
+        stroke: '#111827',
+        'stroke-width': 0.85,
+        fill: 'none',
+      }),
+      svgNode('path', {
+        d: 'M17.2 13.6 L19.8 11.4 M16.3 12.6 L18.9 10.4 M15.4 11.6 L18.0 9.4',
+        stroke: '#111827',
+        'stroke-width': 0.85,
+        fill: 'none',
+      })
+    );
+  } else {
+    // Vietnam
+    svg.append(
+      svgNode('rect', { width: 24, height: 16, fill: '#da251d' }),
+      svgNode('polygon', { points: starPoints(12, 8.2, 4.4, 1.72), fill: '#ffcd00' })
+    );
+  }
+
   return svg;
 }

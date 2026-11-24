@@ -1,5 +1,5 @@
 import { store } from '../core/state.js';
-import { t } from '../i18n/translations.js';
+import { LOCALE_OPTIONS, t } from '../i18n/translations.js';
 import { el, openModal } from './dom.js';
 import { openConnectionModal } from './connection-modal.js';
 
@@ -19,9 +19,13 @@ export function openCommandPalette(): void {
     { label: t('tabTools'), category: 'View', run: () => store.setActiveView('tools') },
     { label: t('newConnection'), category: 'Action', run: () => openConnectionModal() },
     { label: t('proxySetup'), category: 'Action', run: () => openConnectionModal(undefined, 'proxy') },
-    { label: 'ライトモードに切替 (Light Mode)', category: 'Theme', run: () => store.setTheme('light') },
-    { label: 'ダークモードに切替 (Dark Mode)', category: 'Theme', run: () => store.setTheme('dark') },
-    { label: '日本語 / English 切替', category: 'Locale', run: () => store.setAppLocale(store.locale === 'ja' ? 'en' : 'ja') },
+    { label: t('cmdLightMode'), category: 'Theme', run: () => store.setTheme('light') },
+    { label: t('cmdDarkMode'), category: 'Theme', run: () => store.setTheme('dark') },
+    ...LOCALE_OPTIONS.map((opt) => ({
+      label: `${t('selectLanguage')}: ${opt.label} (${opt.short})`,
+      category: 'Language',
+      run: () => store.setAppLocale(opt.code),
+    })),
   ];
 
   if (store.schema) {
@@ -55,8 +59,8 @@ export function openCommandPalette(): void {
       const inp = el('input', {
         type: 'search',
         className: 'input',
-        placeholder: 'テーブル名・機能・テーマを検索...',
-        'aria-label': 'コマンド検索',
+        placeholder: t('cmdSearchPlaceholder'),
+        'aria-label': t('commandPalette'),
       });
       const listEl = el('div', { className: 'cmd-list' });
 

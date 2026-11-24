@@ -91,18 +91,5 @@ export default defineConfig({
     minify: 'esbuild',
     cssMinify: true,
     sourcemap: false,
-    rollupOptions: {
-      output: {
-        manualChunks(id) {
-          if (id.includes('er-diagram')) return 'er-diagram';
-          if (id.includes('data-grid')) return 'data-grid';
-          if (id.includes('sql-editor')) return 'sql-editor';
-          if (id.includes('table-designer')) return 'table-designer';
-          if (id.includes('db-tools') || id.includes('schema-diff') || id.includes('mock-data')) return 'db-tools';
-          if (id.includes('import-export') || id.includes('proxy-guide')) return 'io-modals';
-          if (id.includes('charts')) return 'charts';
-        },
-      },
-    },
   },
 });

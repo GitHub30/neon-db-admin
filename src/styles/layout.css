@@ -78,6 +78,81 @@
   min-width: 36px;
 }
 
+.locale-dropdown {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.locale-trigger {
+  gap: 6px;
+  padding: 4px 8px;
+}
+
+.flag-icon {
+  display: inline-block;
+  flex-shrink: 0;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px var(--border-default);
+  vertical-align: middle;
+}
+
+.locale-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 650;
+  min-width: 176px;
+  padding: 4px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.locale-menu[hidden] {
+  display: none;
+}
+
+.locale-option {
+  width: 100%;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-primary);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.locale-option-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.locale-option:hover,
+.locale-option:focus-visible {
+  background: var(--bg-hover);
+}
+
+.locale-option[aria-selected="true"] {
+  background: var(--bg-selected);
+  color: var(--accent);
+  font-weight: 600;
+}
+
 .conn-pill:hover {
   background: var(--bg-hover);
 }

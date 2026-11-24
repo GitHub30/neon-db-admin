@@ -36,7 +36,7 @@
     "Table Designer, Index & Foreign Key Manager, Cross-Dialect DDL Converter",
     "Import/Export Suite: SQLite binary, SQL Dump, SQL script runner, auto-typed CSV/TSV/JSON import",
     "Schema Health Audit, Schema Diff Migration Generator, Mock Data Generator",
-    "Offline-capable PWA with Light/Dark mode and Japanese/English UI"
+    "Offline-capable PWA with Light/Dark mode and 5-language UI (Japanese, English, Chinese, Korean, Vietnamese)"
   ],
   "llms_txt": "https://github30.github.io/neon-db-admin/llms.txt",
   "llms_full_txt": "https://github30.github.io/neon-db-admin/llms-full.txt"

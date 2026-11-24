@@ -68,7 +68,6 @@ function applyHashRoute(): void {
 }
 
 function renderEmptyWorkbench(container: HTMLElement): void {
-  const isEn = store.locale === 'en';
   container.replaceChildren(
     el(
       'div',
@@ -77,14 +76,12 @@ function renderEmptyWorkbench(container: HTMLElement): void {
       el(
         'h1',
         { style: { margin: '0', fontSize: '1.15rem', fontWeight: '700', color: 'var(--ink-primary)' } },
-        isEn ? 'Connect to a Database' : 'データベースに接続して開始'
+        t('emptyHeroTitle')
       ),
       el(
         'p',
         { style: { margin: '0', maxWidth: '520px', fontSize: '0.84rem', color: 'var(--ink-secondary)' } },
-        isEn
-          ? 'Open a local SQLite file (.sqlite / .db) or connect to MySQL, MariaDB, PostgreSQL, or Cloudflare D1 via Connection Manager.'
-          : 'ローカルの SQLite ファイルを開くか、「接続管理」から MySQL・MariaDB・PostgreSQL・Cloudflare D1 へ接続してください。'
+        t('emptyHeroDesc')
       ),
       el(
         'div',
@@ -101,7 +98,7 @@ function renderEmptyWorkbench(container: HTMLElement): void {
             },
           },
           icon('server', 14),
-          isEn ? 'Open Connection Manager' : '接続管理（リモートDB・プロキシ）'
+          t('openConnManagerBtn')
         ),
         el(
           'button',
@@ -123,7 +120,7 @@ function renderEmptyWorkbench(container: HTMLElement): void {
             onClick: async () => {
               try {
                 await createAndConnectEmptySqlite();
-                toast('新規 SQLite データベースを作成しました', 'success');
+                toast(t('newSqliteCreated'), 'success');
               } catch (err) {
                 toast(err instanceof Error ? err.message : String(err), 'error', 5000);
               }
@@ -160,7 +157,7 @@ function mountApp(): void {
 
   const openCreateTable = async () => {
     if (!store.adapter) {
-      toast('先にデータベースへ接続するか、新規SQLiteを作成してください', 'info');
+      toast(t('connectFirstHint'), 'info');
       openConnections();
       return;
     }
@@ -319,7 +316,7 @@ function mountApp(): void {
           btnNew.addEventListener('click', async () => {
             try {
               await createAndConnectEmptySqlite();
-              toast('新規 SQLite データベースを作成しました', 'success');
+              toast(t('newSqliteCreated'), 'success');
             } catch (err) {
               toast(err instanceof Error ? err.message : String(err), 'error', 5000);
             }
