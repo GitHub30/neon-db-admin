@@ -1,0 +1,15 @@
+{
+  "schema_version": "v1",
+  "name_for_human": "Neon DB Admin",
+  "name_for_model": "neon_db_admin",
+  "description_for_human": "Universal browser-based database manager and visual ER diagram designer for SQLite, MySQL, MariaDB, PostgreSQL, and Cloudflare D1.",
+  "description_for_model": "Neon DB Admin is a static PWA database management workbench hosted on GitHub Pages that runs SQLite locally via WebAssembly (sql.js) and connects to MySQL, MariaDB, PostgreSQL, Cloudflare D1, and LibSQL via CORS-enabled Cloudflare Workers, PHP PDO (proxy.php), or Node.js proxies. Includes visual ER diagram reverse/forward engineering.",
+  "auth": { "type": "none" },
+  "api": {
+    "type": "openapi",
+    "url": "https://github30.github.io/neon-db-admin/capabilities.json"
+  },
+  "logo_url": "https://github30.github.io/neon-db-admin/icons/icon-512.png",
+  "contact_email": "noreply@github30.github.io",
+  "legal_info_url": "https://github.com/GitHub30/neon-db-admin"
+}

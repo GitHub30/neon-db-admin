@@ -1,0 +1,23 @@
+{
+  "name": "neon-db-admin",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Modern browser-based universal database management tool & visual ER diagram designer supporting MySQL, MariaDB, PostgreSQL, SQLite (WASM), Cloudflare D1, and LibSQL via Cloudflare Workers and PHP/Node proxies.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --port 4173",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "sql.js": "^1.13.0"
+  },
+  "devDependencies": {
+    "@types/sql.js": "^1.4.9",
+    "typescript": "^5.8.2",
+    "vite": "^6.2.2",
+    "vitest": "^3.0.9"
+  }
+}

@@ -1,0 +1,21 @@
+# Neon DB Admin
+
+> Browser-based universal database management tool and MySQL Workbench-style visual ER diagram designer deployed on GitHub Pages. Supports SQLite (in-browser WebAssembly), MySQL, MariaDB, PostgreSQL, Cloudflare D1, and LibSQL/Turso via CORS-enabled Cloudflare Workers, PHP PDO (`proxy.php`), and Node.js (`proxy-node.mjs`) proxies.
+
+Neon DB Admin combines capabilities from phpMyAdmin, Adminer, DB Browser for SQLite, MySQL Workbench, pgAdmin, DBeaver, and DbGate inside a fast, offline-ready Progressive Web App (PWA) with Light/Dark mode and bilingual Japanese/English UI.
+
+## Documentation
+
+- [User Guide & Feature Overview](https://github30.github.io/neon-db-admin/docs/guide.md): Supported databases, data grid editing, SQL editor, import/export, and analysis tools.
+- [Proxy Protocol Specification](https://github30.github.io/neon-db-admin/docs/proxy-protocol.md): Unified JSON HTTP API for Cloudflare Workers, PHP PDO (`proxy.php`), and Node.js proxies with `Access-Control-Allow-Origin: *`.
+- [Visual ER Diagram Designer Guide](https://github30.github.io/neon-db-admin/docs/er-diagram.md): Reverse engineering, forward DDL generation, Crow's Foot cardinality, and SVG/PNG/Mermaid/DBML export.
+- [Full Reference (llms-full.txt)](https://github30.github.io/neon-db-admin/llms-full.txt): Single-file complete documentation for LLM ingestion.
+
+## Live Resources & Self-Hosted Proxies
+
+- [Web Workbench (GitHub Pages)](https://github30.github.io/neon-db-admin/): Main PWA application.
+- [Live Cloudflare Workers Proxy](https://neon-db-admin-proxy.6u.workers.dev/health): CORS-enabled edge proxy for MySQL, MariaDB, PostgreSQL, Cloudflare D1, and LibSQL.
+- [PHP PDO Proxy (`proxy.php`)](https://github30.github.io/neon-db-admin/proxies/proxy.php): Zero-dependency single-file PHP proxy for MySQL, MariaDB, PostgreSQL, and SQLite.
+- [Node.js Proxy (`proxy-node.mjs`)](https://github30.github.io/neon-db-admin/proxies/proxy-node.mjs): Standalone Node.js 22+ proxy for local/private databases.
+- [Capabilities Manifest (`capabilities.json`)](https://github30.github.io/neon-db-admin/capabilities.json): Machine-readable JSON capabilities descriptor.
+- [Source Repository](https://github.com/GitHub30/neon-db-admin): Open-source repository including Wrangler Worker project and Vitest suite.

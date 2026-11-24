@@ -1,0 +1,18 @@
+name = "neon-db-admin-proxy"
+main = "src/index.ts"
+compatibility_date = "2025-03-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+ALLOWED_ORIGIN = "*"
+MAX_ROWS = "5000"
+QUERY_TIMEOUT_MS = "15000"
+
+# Optional: Set PROXY_AUTH_TOKEN as a Wrangler secret to restrict access:
+#   npx wrangler secret put PROXY_AUTH_TOKEN
+#
+# Optional: Bind your own Cloudflare D1 database for direct binding queries:
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "my-database"
+# database_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"

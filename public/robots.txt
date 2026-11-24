@@ -1,0 +1,29 @@
+# Neon DB Admin — SEO / AEO / GEO / AIO / LLMO Crawler Policy
+User-agent: *
+Allow: /
+
+# Explicitly welcome AI Search & LLM Crawlers (LLMO / GEO / AEO)
+User-agent: Googlebot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: GPTBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Applebot
+Allow: /
+
+Sitemap: https://github30.github.io/neon-db-admin/sitemap.xml
+# LLMs.txt: https://github30.github.io/neon-db-admin/llms.txt
+# Full LLM Docs: https://github30.github.io/neon-db-admin/llms-full.txt

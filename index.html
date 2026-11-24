@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Neon DB Admin — マルチDB管理ツール &amp; ER図デザイナー (PWA)</title>
+    <meta
+      name="description"
+      content="SQLite (WASM)・MySQL・MariaDB・PostgreSQL・Cloudflare D1をブラウザで管理。MySQL Workbench風ER図作成、インライン編集、SQLエディタ、Cloudflare Workers / proxy.php プロキシ対応の高速PWA。"
+    />
+    <meta name="keywords" content="データベース管理ツール,SQLite ブラウザ,MySQL管理,PostgreSQLクライアント,Cloudflare D1,ER図作成,MySQL Workbench,phpMyAdmin,Adminer,DBeaver,Cloudflare Workers プロキシ,PWA" />
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
+    <meta name="author" content="GitHub30" />
+    <link rel="canonical" href="https://github30.github.io/neon-db-admin/" />
+    <link rel="alternate" type="text/plain" title="LLMs.txt" href="./llms.txt" />
+    <link rel="ard" href="./.well-known/ard.json" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./favicon.ico" sizes="any" />
+    <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+
+    <meta name="theme-color" id="meta-theme-color" content="#f8fafc" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Neon DB Admin" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Neon DB Admin" />
+    <meta property="og:url" content="https://github30.github.io/neon-db-admin/" />
+    <meta property="og:title" content="Neon DB Admin — ユニバーサル ブラウザDB管理ツール &amp; ER図デザイナー" />
+    <meta
+      property="og:description"
+      content="SQLite (WASM)、MySQL、MariaDB、PostgreSQL、Cloudflare D1、LibSQL に対応。データ編集・SQLエディタ・ER図リバース/フォワード生成・CORS対応プロキシを内蔵したオープンソースPWA。"
+    />
+    <meta property="og:image" content="https://github30.github.io/neon-db-admin/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Neon DB Admin — Universal Browser Database Manager and Visual ER Diagram Designer" />
+    <meta property="og:locale" content="ja_JP" />
+    <meta property="og:locale:alternate" content="en_US" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Neon DB Admin — ブラウザDB管理ツール &amp; ER図デザイナー" />
+    <meta
+      name="twitter:description"
+      content="SQLite (WASM)・MySQL・MariaDB・PostgreSQL・Cloudflare D1をブラウザで管理。MySQL Workbench風ER図・Cloudflare Workers / proxy.php プロキシ対応。"
+    />
+    <meta name="twitter:image" content="https://github30.github.io/neon-db-admin/og-image.png" />
+
+    <!-- Instant Theme Init (Zero FOUC + Syncs Single Theme-Color Meta) -->
+    <script>
+      (function () {
+        try {
+          var saved = localStorage.getItem('neondb_theme_v1') || 'system';
+          var dark = saved === 'dark' || (saved === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+          var m = document.getElementById('meta-theme-color');
+          if (m) m.content = dark ? '#0d1117' : '#f8fafc';
+        } catch (e) {}
+      })();
+    </script>
+
+    <!-- Structured Data: SEO / AEO / GEO / AIO JSON-LD -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": ["WebApplication", "SoftwareSourceCode"],
+            "@id": "https://github30.github.io/neon-db-admin/#app",
+            "name": "Neon DB Admin",
+            "url": "https://github30.github.io/neon-db-admin/",
+            "applicationCategory": "DeveloperApplication",
+            "operatingSystem": "Web, Windows, macOS, Linux, iOS, Android",
+            "browserRequirements": "Requires JavaScript and WebAssembly",
+            "isAccessibleForFree": true,
+            "inLanguage": ["ja", "en"],
+            "programmingLanguage": ["TypeScript", "SQL", "PHP"],
+            "description": "SQLite (WebAssembly)、MySQL、MariaDB、PostgreSQL、Cloudflare D1、LibSQL に対応するブラウザ完結型のデータベース管理ツールおよび視覚的ER図デザイナー。",
+            "featureList": [
+              "SQLiteデータベースファイルのブラウザ内アップロード・編集・バイナリ書き出し (sql.js WASM)",
+              "Cloudflare Workersプロキシおよびproxy.phpによるMySQL・MariaDB・PostgreSQL・Cloudflare D1・LibSQL接続 (CORS Access-Control-Allow-Origin: * 対応)",
+              "MySQL Workbench風のインタラクティブER図デザイナー（リバース生成・フォワードDDL生成・Crow's Foot記法・SVG/PNG/Mermaid/DBML出力）",
+              "シンタックスハイライト・補完・EXPLAIN実行計画・SQL整形・SVGチャート可視化付きSQLエディタ",
+              "データグリッドのインライン編集・フィルタビルダー・外部キーリンクジャンプ・CSV/JSON/SQL/Markdownエクスポート",
+              "スキーマ健全性診断・スキーマ差分マイグレーション生成・モックデータ自動生成・ライト/ダークモード・PWAオフライン対応"
+            ],
+            "offers": {
+              "@type": "Offer",
+              "price": "0",
+              "priceCurrency": "JPY"
+            },
+            "codeRepository": "https://github.com/GitHub30/neon-db-admin",
+            "screenshot": "https://github30.github.io/neon-db-admin/og-image.png"
+          },
+          {
+            "@type": "HowTo",
+            "name": "ブラウザからSQLite・MySQL・PostgreSQL・Cloudflare D1へ接続する方法",
+            "description": "Neon DB Adminを使用してローカルSQLiteファイルまたはリモートデータベースへ接続する手順。",
+            "step": [
+              {
+                "@type": "HowToStep",
+                "name": "SQLiteファイルをブラウザで開く",
+                "text": "画面右上の「SQLiteファイルを開く」またはウィンドウへ .sqlite / .db ファイルをドラッグ＆ドロップすると、WebAssembly上でローカル実行されサーバーへ送信せずに閲覧・編集できます。"
+              },
+              {
+                "@type": "HowToStep",
+                "name": "Cloudflare WorkersプロキシでリモートDBへ接続する",
+                "text": "「接続管理」から MySQL / MariaDB / PostgreSQL / Cloudflare D1 / LibSQL を選び、プロキシ方式に「Cloudflare Workers プロキシ」を指定して接続情報を入力し、接続テスト後に保存します。"
+              },
+              {
+                "@type": "HowToStep",
+                "name": "proxy.php または proxy-node.mjs で社内・ローカルDBへ接続する",
+                "text": "「プロキシ設定 / ダウンロード」から proxy.php または proxy-node.mjs をダウンロードし、認証トークン (NEON_DB_PROXY_TOKEN) を設定してサーバーへ配置後、プロキシURLを指定して接続します。"
+              }
+            ]
+          },
+          {
+            "@type": "FAQPage",
+            "mainEntity": [
+              {
+                "@type": "Question",
+                "name": "SQLiteファイルを開いたとき、データは外部サーバーに送信されますか？",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "いいえ。ローカルの .sqlite / .db ファイルはブラウザ内の WebAssembly (sql.js) と専用 Web Worker 上でのみ処理されるため、ファイルの内容が外部サーバーへアップロードされることはありません。オフライン環境でもPWAとして動作します。"
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "静的サイト（GitHub Pages）からMySQL・MariaDB・PostgreSQL・Cloudflare D1に接続できるのはなぜですか？",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "ブラウザは直接TCPソケットを開けないため、Access-Control-Allow-Origin: * を返す Cloudflare Workers プロキシ（cloudflare:sockets TCP / D1 REST API対応）、またはセルフホスト可能なシングルファイル proxy.php / proxy-node.mjs を中継して安全にクエリを実行します。"
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "MySQL WorkbenchのようなER図の作成・リバースエンジニアリングに対応していますか？",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "はい。接続中のデータベースからテーブル・主キー・外部キーを自動解析してCrow's Foot記法のER図をリバース生成できます。さらにキャンバス上でテーブルやリレーションを視覚的に設計し、SQLite・MySQL・MariaDB・PostgreSQL・D1向けのCREATE TABLE DDLをフォワード生成、SVG・PNG・Mermaid・DBML形式で書き出せます。"
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "パスワードやAPIトークンはどのように保護されますか？",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "初期設定ではパスワードやAPIトークンはlocalStorageに永続保存されず、タブを閉じると消去されるsessionStorageのみに保持されます。またCloudflare WorkersプロキシはプライベートIP・メタデータIPへのSSRF防御と任意のトークン認証を備えています。"
+                }
+              }
+            ]
+          },
+          {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "Neon DB Admin",
+                "item": "https://github30.github.io/neon-db-admin/"
+              }
+            ]
+          }
+        ]
+      }
+    </script>
+  </head>
+  <body>
+    <a class="skip-link" href="#workbench">ワークベンチへスキップ</a>
+
+    <!-- Top Application Bar -->
+    <header id="app-topbar" class="topbar">
+      <div class="topbar-left">
+        <a href="#workbench" class="brand">
+          <span class="brand-mark" aria-hidden="true">DB</span>
+          <span class="brand-name">Neon DB Admin</span>
+        </a>
+      </div>
+      <div class="topbar-right">
+        <span class="badge badge-sqlite">Ready</span>
+      </div>
+    </header>
+
+    <main id="main-content">
+      <!-- Interactive Database Workbench -->
+      <section id="workbench" class="workbench" aria-label="データベース管理ワークベンチ">
+        <aside id="app-sidebar" class="sidebar" aria-label="データベースエクスプローラー"></aside>
+        <div class="workspace">
+          <div id="workspace-tabs" class="workspace-tabs" role="tablist" aria-label="ワークスペース機能タブ">
+            <button type="button" role="tab" id="tab-data" class="ws-tab" aria-selected="true" aria-controls="workspace-content">データ閲覧・編集</button>
+          </div>
+          <div id="workspace-content" class="workspace-content" role="tabpanel" aria-labelledby="tab-data">
+            <div class="panel-scroll">
+              <div class="card">
+                <h1 style="margin: 0 0 6px; font-size: 1.15rem; font-weight: 700;">Neon DB Admin ワークベンチへようこそ</h1>
+                <p style="margin: 0; color: var(--ink-secondary); font-size: 0.84rem;">
+                  SQLiteファイルの直接編集（ブラウザWASM）から、Cloudflare Workers / proxy.php 経由の MySQL・MariaDB・PostgreSQL・Cloudflare D1 管理、MySQL Workbench 風 ER図作成まで1つで完結します。
+                </p>
+              </div>
+            </div>
+          </div>
+          <div id="app-statusbar" class="statusbar" role="status">
+            <div class="statusbar-group"><span>Ready</span></div>
+            <div class="statusbar-group"><span>CORS: *</span><span>PWA</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Authoritative Reference, Supported Matrix & AEO/GEO FAQ -->
+      <section id="docs" class="docs-section" aria-labelledby="docs-heading">
+        <div class="docs-header">
+          <h2 id="docs-heading">Neon DB Admin — マルチデータベース対応ブラウザ管理ツール &amp; ER図デザイナー</h2>
+          <p>
+            Neon DB Admin は、<strong>phpMyAdmin・Adminer・DB Browser for SQLite・MySQL Workbench・pgAdmin・DBeaver・DbGate</strong> の実用的なワークフローを1つの軽量PWAへ統合したユニバーサルデータベースクライアントです。ブラウザのみでローカル SQLite ファイルを安全に編集でき、CORS (<code>Access-Control-Allow-Origin: *</code>) 対応の Cloudflare Workers プロキシまたは <code>proxy.php</code> を通じて本番・検証環境のリモートDBへ接続できます。
+          </p>
+        </div>
+
+        <div class="docs-grid">
+          <article class="docs-card">
+            <h3>データ閲覧・インライン編集</h3>
+            <p>ページネーション・SQLソート・複数条件WHEREフィルタビルダー・ダブルクリックでのセル直接編集・SQLプレビュー付きバッチコミット・外部キーリンクジャンプ・セルJSON整形インスペクタを備えています。</p>
+          </article>
+          <article class="docs-card">
+            <h3>高機能 SQL IDE &amp; チャート</h3>
+            <p>マルチタブ対応エディタ、シンタックスハイライト、テーブル/カラム自動補完 (<code>Ctrl+Space</code>)、<code>EXPLAIN</code> 実行計画、SQL整形、履歴・スニペット管理、実行結果からの棒/折れ線/円グラフ即時生成に対応します。</p>
+          </article>
+          <article class="docs-card">
+            <h3>MySQL Workbench 風 ER図設計</h3>
+            <p>既存DBからの自動リバースエンジニアリング、Crow's Foot記法 (<code>1:1</code> / <code>1:N</code> / <code>N:M</code>)、ドラッグ配置・階層自動レイアウト、各SQL方言へのフォワードDDL生成、SVG・PNG・Mermaid・DBML書き出しに対応します。</p>
+          </article>
+          <article class="docs-card">
+            <h3>診断・差分・インポート/エクスポート</h3>
+            <p>主キー欠如や未インデックス外部キーの1クリック最適化、ERモデルとのスキーマ差分マイグレーション生成、外部キー整合モックデータ生成、SQLダンプ・CSV/TSV/JSON自動型推論インポートを内蔵しています。</p>
+          </article>
+        </div>
+
+        <h3 style="margin: 0 0 12px; font-size: 1.05rem;">サポートデータベース &amp; 接続方式マトリクス</h3>
+        <div class="docs-table-wrap">
+          <table class="docs-table">
+            <thead>
+              <tr>
+                <th>データベース</th>
+                <th>ブラウザ WASM (オフライン)</th>
+                <th>Cloudflare Workers プロキシ</th>
+                <th>PHP プロキシ (<code>proxy.php</code>)</th>
+                <th>Node.js プロキシ</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>SQLite 3</strong> (<code>.sqlite</code> / <code>.db</code>)</td>
+                <td>対応 (sql.js Web Worker)</td>
+                <td>— (ブラウザWASM推奨)</td>
+                <td>対応 (PDO SQLite)</td>
+                <td>対応 (<code>node:sqlite</code>)</td>
+              </tr>
+              <tr>
+                <td><strong>MySQL 5.7 / 8.x</strong></td>
+                <td>—</td>
+                <td>対応 (TCP/TLS <code>mysql2</code>)</td>
+                <td>対応 (PDO MySQL)</td>
+                <td>対応 (<code>mysql2</code>)</td>
+              </tr>
+              <tr>
+                <td><strong>MariaDB 10.x / 11.x</strong></td>
+                <td>—</td>
+                <td>対応 (TCP/TLS <code>mysql2</code>)</td>
+                <td>対応 (PDO MySQL)</td>
+                <td>対応 (<code>mysql2</code>)</td>
+              </tr>
+              <tr>
+                <td><strong>PostgreSQL 12+</strong> (Neon / Supabase / RDS)</td>
+                <td>—</td>
+                <td>対応 (TCP/TLS <code>pg</code>)</td>
+                <td>対応 (PDO PgSQL)</td>
+                <td>対応 (<code>pg</code>)</td>
+              </tr>
+              <tr>
+                <td><strong>Cloudflare D1 Database</strong></td>
+                <td>—</td>
+                <td>対応 (REST API / Worker Binding)</td>
+                <td>—</td>
+                <td>—</td>
+              </tr>
+              <tr>
+                <td><strong>LibSQL / Turso</strong></td>
+                <td>—</td>
+                <td>対応 (HTTP Pipeline v2)</td>
+                <td>—</td>
+                <td>—</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 style="margin: 0 0 12px; font-size: 1.05rem;">よくある質問 (FAQ)</h3>
+        <div class="faq-list">
+          <details class="faq-item" open>
+            <summary>SQLiteファイルを開いたとき、データは外部サーバーに送信されますか？</summary>
+            <p>いいえ。ローカルの <code>.sqlite</code> / <code>.db</code> ファイルはブラウザ内の WebAssembly (sql.js) と専用 Web Worker 上でのみ処理されるため、ファイルの内容が外部サーバーへアップロードされることはありません。オフライン環境でもPWAとして動作します。</p>
+          </details>
+          <details class="faq-item">
+            <summary>静的サイト（GitHub Pages）からMySQL・MariaDB・PostgreSQL・Cloudflare D1に接続できるのはなぜですか？</summary>
+            <p>ブラウザは直接TCPソケットを開けないため、<code>Access-Control-Allow-Origin: *</code> を返す Cloudflare Workers プロキシ（<code>cloudflare:sockets</code> TCP / D1 REST API対応）、またはセルフホスト可能なシングルファイル <code>proxy.php</code> / <code>proxy-node.mjs</code> を中継して安全にクエリを実行します。</p>
+          </details>
+          <details class="faq-item">
+            <summary>MySQL WorkbenchのようなER図の作成・リバースエンジニアリングに対応していますか？</summary>
+            <p>はい。接続中のデータベースからテーブル・主キー・外部キーを自動解析してCrow's Foot記法のER図をリバース生成できます。さらにキャンバス上でテーブルやリレーションを視覚的に設計し、SQLite・MySQL・MariaDB・PostgreSQL・D1向けのCREATE TABLE DDLをフォワード生成、SVG・PNG・Mermaid・DBML形式で書き出せます。</p>
+          </details>
+          <details class="faq-item">
+            <summary>パスワードやAPIトークンはどのように保護されますか？</summary>
+            <p>初期設定ではパスワードやAPIトークンはlocalStorageに永続保存されず、タブを閉じると消去されるsessionStorageのみに保持されます。またCloudflare WorkersプロキシはプライベートIP・メタデータIPへのSSRF防御と任意のトークン認証を備えています。</p>
+          </details>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="site-footer-inner">
+        <span>&copy; 2026 Neon DB Admin — Open-Source Universal Database Workbench (PWA · CORS: *)</span>
+        <nav class="footer-links" aria-label="技術リソースとダウンロード">
+          <a href="./proxies/proxy.php" download>proxy.php</a>
+          <a href="./proxies/proxy-node.mjs" download>proxy-node.mjs</a>
+          <a href="./llms.txt">llms.txt</a>
+          <a href="./llms-full.txt">llms-full.txt</a>
+          <a href="./capabilities.json">capabilities.json</a>
+          <a href="./.well-known/ard.json">ard.json</a>
+          <a href="./sitemap.xml">sitemap.xml</a>
+          <a href="https://github.com/GitHub30/neon-db-admin" target="_blank" rel="noopener noreferrer">GitHub</a>
+        </nav>
+      </div>
+    </footer>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

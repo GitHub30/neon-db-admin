@@ -1,0 +1,42 @@
+{
+  "schema_version": "1.0",
+  "name": "Neon DB Admin",
+  "homepage": "https://github30.github.io/neon-db-admin/",
+  "repository": "https://github.com/GitHub30/neon-db-admin",
+  "description": "Browser-based universal database workbench and visual ER diagram designer supporting SQLite (WASM), MySQL, MariaDB, PostgreSQL, Cloudflare D1, and LibSQL.",
+  "supported_databases": [
+    { "id": "sqlite", "name": "SQLite 3", "transports": ["browser-wasm", "php-proxy", "node-proxy"] },
+    { "id": "mysql", "name": "MySQL 5.7 / 8.x", "transports": ["cloudflare-worker", "php-proxy", "node-proxy"] },
+    { "id": "mariadb", "name": "MariaDB 10.x / 11.x", "transports": ["cloudflare-worker", "php-proxy", "node-proxy"] },
+    { "id": "postgresql", "name": "PostgreSQL 12+ (Neon, Supabase, RDS)", "transports": ["cloudflare-worker", "php-proxy", "node-proxy"] },
+    { "id": "d1", "name": "Cloudflare D1 Database", "transports": ["cloudflare-worker-rest", "cloudflare-worker-binding"] },
+    { "id": "libsql", "name": "Turso / LibSQL", "transports": ["cloudflare-worker"] }
+  ],
+  "proxies": {
+    "cloudflare_worker": {
+      "live_endpoint": "https://neon-db-admin-proxy.6u.workers.dev",
+      "cors": "Access-Control-Allow-Origin: *",
+      "ssrf_protection": true
+    },
+    "php": {
+      "download_url": "https://github30.github.io/neon-db-admin/proxies/proxy.php",
+      "cors": "Access-Control-Allow-Origin: *",
+      "requires_token": true
+    },
+    "nodejs": {
+      "download_url": "https://github30.github.io/neon-db-admin/proxies/proxy-node.mjs",
+      "cors": "Access-Control-Allow-Origin: *"
+    }
+  },
+  "features": [
+    "Data Grid with visual filter builder, sorting, inline editing, FK jump, and JSON cell inspector",
+    "Multi-tab SQL Editor with syntax highlighting, autocomplete, EXPLAIN plan, formatter, history, snippets, and SVG charts",
+    "MySQL Workbench-style Visual ER Diagram Designer with Crow's Foot notation, reverse engineering, forward DDL engineering, SVG/PNG/Mermaid/DBML export",
+    "Table Designer, Index & Foreign Key Manager, Cross-Dialect DDL Converter",
+    "Import/Export Suite: SQLite binary, SQL Dump, SQL script runner, auto-typed CSV/TSV/JSON import",
+    "Schema Health Audit, Schema Diff Migration Generator, Mock Data Generator",
+    "Offline-capable PWA with Light/Dark mode and Japanese/English UI"
+  ],
+  "llms_txt": "https://github30.github.io/neon-db-admin/llms.txt",
+  "llms_full_txt": "https://github30.github.io/neon-db-admin/llms-full.txt"
+}

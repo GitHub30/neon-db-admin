@@ -1,0 +1,16 @@
+{
+  "entries": [
+    {
+      "identifier": "urn:air:github30.github.io:neon-db-admin:workbench",
+      "displayName": "Neon DB Admin Universal Database Workbench",
+      "description": "Browser-based database management tool and MySQL Workbench-style visual ER diagram designer for SQLite (WASM), MySQL, MariaDB, PostgreSQL, Cloudflare D1, and LibSQL.",
+      "type": "application/ai-catalog+json",
+      "url": "https://github30.github.io/neon-db-admin/capabilities.json",
+      "representativeQueries": [
+        "Open and edit SQLite database files offline in the browser with WebAssembly",
+        "Connect to MySQL, MariaDB, PostgreSQL, or Cloudflare D1 through a CORS-enabled proxy",
+        "Reverse engineer database tables into a Crow's Foot ER diagram and export SQL DDL"
+      ]
+    }
+  ]
+}

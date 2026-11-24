@@ -1,0 +1,53 @@
+# Neon DB Admin — Complete Technical Reference (llms-full.txt)
+
+- **Homepage**: https://github30.github.io/neon-db-admin/
+- **Repository**: https://github.com/GitHub30/neon-db-admin
+- **Live Cloudflare Worker Proxy**: https://neon-db-admin-proxy.6u.workers.dev
+- **CORS Header**: `Access-Control-Allow-Origin: *` across all proxies and static assets.
+
+## 1. Overview & Architecture
+
+Neon DB Admin is a static single-page Progressive Web App (PWA) written in strict TypeScript and vanilla CSS, built with Vite and zero heavy UI framework overhead.
+
+- **Local SQLite (WASM)**: Runs `sql.js` inside a dedicated Web Worker (`sqlite-worker.ts`) so SQL execution and binary parsing never block the main UI thread. Users can drag-and-drop `.sqlite`, `.db`, `.sqlite3`, or `.db3` files directly into the browser, edit data or schemas, and export updated `.sqlite` binaries with zero server uploads.
+- **Remote Databases via Proxy**: Because web browsers cannot open raw TCP sockets or bypass CORS on cloud APIs like Cloudflare D1, Neon DB Admin communicates over a unified HTTPS JSON proxy protocol implemented across three runtimes:
+  1. **Cloudflare Workers Proxy** (`workers/proxy-worker/`): Uses `nodejs_compat` (`mysql2`, `pg`), `cloudflare:sockets` TCP, and `fetch()` for Cloudflare D1 REST API, bound D1 (`env.DB`), and LibSQL/Turso Hrana HTTP v2 pipelines.
+  2. **PHP PDO Proxy** (`public/proxies/proxy.php`): Single-file zero-dependency PHP 8.1+ script using PDO (`pdo_mysql`, `pdo_pgsql`, `pdo_sqlite`) with `hash_equals` bearer token auth, `realpath` SQLite directory sandboxing, and `ATTR_EMULATE_PREPARES => false`.
+  3. **Node.js Proxy** (`public/proxies/proxy-node.mjs`): Standalone Node.js 22+ HTTP server using `node:sqlite`, `mysql2`, and `pg` for private/localhost development databases.
+
+## 2. Supported Databases Matrix
+
+| Database | Browser WASM | Cloudflare Workers Proxy | PHP Proxy (`proxy.php`) | Node.js Proxy (`proxy-node.mjs`) |
+| --- | --- | --- | --- | --- |
+| SQLite 3 | Yes (Offline) | No (use WASM/PHP/Node) | Yes (PDO SQLite) | Yes (`node:sqlite`) |
+| MySQL 5.7 / 8.x | No | Yes (`mysql2` TCP/TLS) | Yes (PDO MySQL) | Yes (`mysql2`) |
+| MariaDB 10.x / 11.x | No | Yes (`mysql2` TCP/TLS) | Yes (PDO MySQL) | Yes (`mysql2`) |
+| PostgreSQL 12+ (Neon/Supabase/RDS) | No | Yes (`pg` TCP/TLS) | Yes (PDO PgSQL) | Yes (`pg`) |
+| Cloudflare D1 | No | Yes (REST API & Worker Binding) | No | No |
+| LibSQL / Turso | No | Yes (HTTP `/v2/pipeline`) | No | No |
+
+## 3. Core Features
+
+1. **Data Grid & Inline Editing**: Pagination, SQL sorting, multi-condition WHERE filter builder, quick search, double-click inline cell editing, dirty cell highlights, parameterized SQL preview & batch commit, foreign key hyperlink jump to referenced rows, JSON pretty-printing cell inspector, multi-row deletion, and export to CSV (with spreadsheet formula injection guard), JSON, SQL `INSERT`, and Markdown.
+2. **Multi-Tab SQL IDE**: Syntax highlighting (DOM-safe tokenizer), live autocomplete for tables/columns/views/SQL keywords (`Ctrl+Space`), `Ctrl+Enter` execution, run selection, `EXPLAIN` / `EXPLAIN QUERY PLAN`, SQL formatter, query history, saved snippets, and interactive SVG charts (Bar, Line, Pie) directly from query results.
+3. **MySQL Workbench-Style Visual ER Diagram Designer**: Reverse engineering from active database schema, visual table/column editor, Crow's Foot cardinality connectors (`1:1`, `1:N`, `N:M`), drag-and-snap table cards, pan & wheel zoom, hierarchical topological auto-layout, forward engineering DDL generator (SQLite/MySQL/MariaDB/PostgreSQL/D1), and exports to SVG, 2x PNG, Mermaid `erDiagram`, DBML, and `.er.json`.
+4. **Table Designer & DDL Converter**: Visual table creation, `ALTER TABLE ADD COLUMN`, index creation/drop, foreign key inspection, truncate/drop with SQL confirmation, and cross-dialect DDL translation (SQLite ↔ MySQL ↔ PostgreSQL).
+5. **Import / Export Suite**: `.sqlite` binary upload/download, full SQL dump export (DDL + INSERTs), `.sql` script import, and CSV/TSV/JSON import with automatic column type inference and table creation.
+6. **Database Power Tools**: Schema health audit (missing PKs, unindexed foreign keys with 1-click index creation), Schema Diff & migration SQL generator (DB vs ER model), smart mock data generator with live FK value lookup, server variables/`PRAGMA` inspector, and `VACUUM`/`ANALYZE`.
+
+## 4. Unified Proxy HTTP API Protocol
+
+- `GET /health` → Returns `{ ok, service, runtime, version, cors, supportedDialects, authRequired }`
+- `OPTIONS *` → Returns `204 No Content` with `Access-Control-Allow-Origin: *`
+- `POST /api/query` (or `/` on `proxy.php`):
+  - Headers: `Content-Type: application/json`, optional `X-Proxy-Token: <token>`
+  - Body: `{ "action": "test" | "query" | "batch", "dialect": "mysql" | "mariadb" | "postgresql" | "sqlite" | "d1" | "d1-binding" | "libsql", "connection": {...}, "sql": "...", "params": [...], "statements": [...], "maxRows": 2000 }`
+  - Response: `{ "ok": true, "columns": [{ "name": "id", "type": "INTEGER" }], "rows": [[1]], "rowCount": 1, "affectedRows": 0, "insertId": null, "truncated": false, "durationMs": 4.2 }`
+
+## 5. Security Controls
+
+- **SSRF Defense (Workers)**: Strict validation blocking `localhost`, `.local`, `.internal`, RFC1918 IPv4 (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`), loopback (`127.0.0.0/8`, `::1`), cloud metadata (`169.254.169.254`), link-local, octal/hex/integer IP encodings, and non-HTTPS URLs; D1 REST endpoints locked exclusively to `https://api.cloudflare.com/client/v4/accounts/{32-hex}/d1/database/{uuid}/query`.
+- **XSS Defense**: Zero unescaped `innerHTML`; all database values and SQL tokens rendered via `textContent` and `createElement`.
+- **Credential Hygiene**: Passwords and API tokens stay in `sessionStorage` by default (cleared when tab closes) unless user explicitly opts in, with one-click purge.
+- **CSV Formula Injection Guard**: Prefixes dangerous leading characters (`=`, `+`, `-`, `@`) during CSV export.
+- **Destructive SQL Confirmation**: Modal preview & confirmation before `DROP`, `TRUNCATE`, or `DELETE` without `WHERE`.
