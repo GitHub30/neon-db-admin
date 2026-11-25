@@ -11,8 +11,35 @@ import { renderProxyGuidePanel } from './proxy-guide-modal.js';
 
 const SPECIALIZED_DIALECTS = new Set<DbDialect>(['d1', 'd1-binding', 'libsql', 'sqlite']);
 
+function detectUrlSslOverride(rawUrl: string): boolean | undefined {
+  try {
+    const u = new URL(rawUrl);
+    const sslMode = (u.searchParams.get('sslmode') || u.searchParams.get('ssl-mode') || '').toLowerCase();
+    if (
+      sslMode === 'require' ||
+      sslMode === 'required' ||
+      sslMode === 'verify-ca' ||
+      sslMode === 'verify-full' ||
+      sslMode === 'verify_ca' ||
+      sslMode === 'verify_identity'
+    ) {
+      return true;
+    }
+    if (sslMode === 'disable' || sslMode === 'disabled') {
+      return false;
+    }
+    const sslFlag = (u.searchParams.get('ssl') || '').toLowerCase();
+    if (sslFlag === 'true' || sslFlag === '1') return true;
+    if (sslFlag === 'false' || sslFlag === '0') return false;
+  } catch {
+    // Ignore incomplete URLs while typing
+  }
+  return undefined;
+}
+
 export function openConnectionModal(editing?: ConnectionConfig, initialTab: 'connect' | 'proxy' = 'connect'): void {
   const draft: ConnectionConfig = editing ? { ...editing } : createEmptyConnectionTemplate();
+  if (draft.ssl === undefined) draft.ssl = false;
   if (draft.sslRejectUnauthorized === undefined) draft.sslRejectUnauthorized = true;
   if (!draft.proxyUrl) draft.proxyUrl = DEFAULT_WORKER_PROXY_URL;
   let activeTab: 'connect' | 'proxy' = initialTab;
@@ -20,7 +47,8 @@ export function openConnectionModal(editing?: ConnectionConfig, initialTab: 'con
   let advancedOpen = Boolean(
     editing &&
       ((editing.proxyUrl && editing.proxyUrl !== DEFAULT_WORKER_PROXY_URL) ||
-        Boolean(editing.proxyToken))
+        Boolean(editing.proxyToken) ||
+        (!specializedMode && Boolean(editing.url)))
   );
 
   openModal({
@@ -138,6 +166,7 @@ export function openConnectionModal(editing?: ConnectionConfig, initialTab: 'con
         const nameInp = el('input', {
           type: 'text',
           className: 'input',
+          autocomplete: 'off',
           value: draft.name,
           placeholder: previewDefaultName(),
           onInput: (e: Event) => {
@@ -152,6 +181,7 @@ export function openConnectionModal(editing?: ConnectionConfig, initialTab: 'con
         const proxyUrlInp = el('input', {
           type: 'url',
           className: 'input mono',
+          autocomplete: 'off',
           value: draft.proxyUrl || DEFAULT_WORKER_PROXY_URL,
           placeholder: DEFAULT_WORKER_PROXY_URL,
           onInput: (e: Event) => {
@@ -162,6 +192,7 @@ export function openConnectionModal(editing?: ConnectionConfig, initialTab: 'con
         const proxyTokenInp = el('input', {
           type: 'password',
           className: 'input mono',
+          autocomplete: 'new-password',
           value: draft.proxyToken || '',
           placeholder: t('proxyTokenPlaceholder'),
           onInput: (e: Event) => {
@@ -199,6 +230,7 @@ export function openConnectionModal(editing?: ConnectionConfig, initialTab: 'con
         );
 
         const specificFields = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '10px' } });
+        let sslChk: HTMLInputElement | null = null;
 
         if (specializedMode) {
           const specialSel = el(
@@ -228,6 +260,7 @@ export function openConnectionModal(editing?: ConnectionConfig, initialTab: 'con
                   el('input', {
                     type: 'text',
                     className: 'input mono',
+                    autocomplete: 'off',
                     value: draft.accountId || '',
                     placeholder: '0123456789abcdef0123456789abcdef',
                     onInput: (e: Event) => {
@@ -240,6 +273,7 @@ export function openConnectionModal(editing?: ConnectionConfig, initialTab: 'con
                   el('input', {
                     type: 'text',
                     className: 'input mono',
+                    autocomplete: 'off',
                     value: draft.databaseId || '',
                     placeholder: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
                     onInput: (e: Event) => {
@@ -254,6 +288,7 @@ export function openConnectionModal(editing?: ConnectionConfig, initialTab: 'con
                 el('input', {
                   type: 'password',
                   className: 'input mono',
+                  autocomplete: 'new-password',
                   value: draft.apiToken || '',
                   onInput: (e: Event) => {
                     draft.apiToken = (e.target as HTMLInputElement).value.trim();
@@ -272,6 +307,7 @@ export function openConnectionModal(editing?: ConnectionConfig, initialTab: 'con
                 el('input', {
                   type: 'url',
                   className: 'input mono',
+                  autocomplete: 'off',
                   value: draft.url || '',
                   placeholder: 'https://your-db-org.turso.io',
                   onInput: (e: Event) => {
@@ -285,6 +321,7 @@ export function openConnectionModal(editing?: ConnectionConfig, initialTab: 'con
                 el('input', {
                   type: 'password',
                   className: 'input mono',
+                  autocomplete: 'new-password',
                   value: draft.authToken || '',
                   onInput: (e: Event) => {
                     draft.authToken = (e.target as HTMLInputElement).value.trim();
@@ -299,6 +336,7 @@ export function openConnectionModal(editing?: ConnectionConfig, initialTab: 'con
                 el('input', {
                   type: 'text',
                   className: 'input mono',
+                  autocomplete: 'off',
                   value: draft.filePath || '',
                   placeholder: 'app.sqlite',
                   onInput: (e: Event) => {
@@ -311,20 +349,15 @@ export function openConnectionModal(editing?: ConnectionConfig, initialTab: 'con
           }
         } else {
           // Streamlined default SQL connection form (auto-detects MySQL / MariaDB / PostgreSQL / URL)
+          sslChk = el('input', {
+            type: 'checkbox',
+            checked: Boolean(draft.ssl),
+            onChange: (e: Event) => {
+              draft.ssl = (e.target as HTMLInputElement).checked;
+            },
+          });
+
           specificFields.append(
-            labeledField(
-              t('connUrlLabel'),
-              el('input', {
-                type: 'password',
-                className: 'input mono',
-                value: draft.url || '',
-                placeholder: 'mysql://user:pass@host:3306/db  |  postgresql://user:pass@host:5432/db',
-                onInput: (e: Event) => {
-                  draft.url = (e.target as HTMLInputElement).value.trim();
-                  refreshNamePlaceholder();
-                },
-              })
-            ),
             el(
               'div',
               { className: 'field-row' },
@@ -333,6 +366,7 @@ export function openConnectionModal(editing?: ConnectionConfig, initialTab: 'con
                 el('input', {
                   type: 'text',
                   className: 'input mono',
+                  autocomplete: 'off',
                   value: draft.host || '',
                   placeholder: 'db.example.com',
                   onInput: (e: Event) => {
@@ -346,6 +380,7 @@ export function openConnectionModal(editing?: ConnectionConfig, initialTab: 'con
                 el('input', {
                   type: 'number',
                   className: 'input mono',
+                  autocomplete: 'off',
                   value: draft.port ? String(draft.port) : '',
                   placeholder: t('portOptionalPlaceholder'),
                   onInput: (e: Event) => {
@@ -359,6 +394,7 @@ export function openConnectionModal(editing?: ConnectionConfig, initialTab: 'con
                 el('input', {
                   type: 'text',
                   className: 'input mono',
+                  autocomplete: 'off',
                   value: draft.database || '',
                   placeholder: t('databaseOptionalPlaceholder'),
                   onInput: (e: Event) => {
@@ -375,6 +411,7 @@ export function openConnectionModal(editing?: ConnectionConfig, initialTab: 'con
                 el('input', {
                   type: 'text',
                   className: 'input mono',
+                  autocomplete: 'off',
                   value: draft.user || '',
                   placeholder: 'root / postgres',
                   onInput: (e: Event) => {
@@ -388,6 +425,7 @@ export function openConnectionModal(editing?: ConnectionConfig, initialTab: 'con
                 el('input', {
                   type: 'password',
                   className: 'input mono',
+                  autocomplete: 'new-password',
                   value: draft.password || '',
                   onInput: (e: Event) => {
                     draft.password = (e.target as HTMLInputElement).value;
@@ -401,20 +439,33 @@ export function openConnectionModal(editing?: ConnectionConfig, initialTab: 'con
               el(
                 'label',
                 { style: { display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.82rem' } },
-                el('input', {
-                  type: 'checkbox',
-                  checked: draft.ssl !== false,
-                  onChange: (e: Event) => {
-                    draft.ssl = (e.target as HTMLInputElement).checked;
-                  },
-                }),
+                sslChk,
                 t('sslEnableLabel')
               )
             )
           );
         }
 
-        // Collapsible advanced settings (hidden by default: Connection Name, Proxy URL, Proxy Token, Dialect Override, Self-Signed TLS)
+        const connUrlInp = el('input', {
+          type: 'password',
+          className: 'input mono',
+          autocomplete: 'new-password',
+          spellcheck: 'false',
+          value: draft.url || '',
+          placeholder: 'mysql://user:pass@host:3306/db  |  postgresql://user:pass@host:5432/db',
+          onInput: (e: Event) => {
+            const v = (e.target as HTMLInputElement).value.trim();
+            draft.url = v;
+            const urlSsl = detectUrlSslOverride(v);
+            if (urlSsl !== undefined) {
+              draft.ssl = urlSsl;
+              if (sslChk) sslChk.checked = urlSsl;
+            }
+            refreshNamePlaceholder();
+          },
+        });
+
+        // Collapsible advanced settings (hidden by default: Connection URL, Connection Name, Proxy URL, Proxy Token, Dialect Override, Self-Signed TLS)
         const advancedDetails = el(
           'details',
           {
@@ -428,6 +479,7 @@ export function openConnectionModal(editing?: ConnectionConfig, initialTab: 'con
           el(
             'div',
             { className: 'conn-advanced-body' },
+            !specializedMode && labeledField(t('connUrlLabel'), connUrlInp),
             el('div', { className: 'field-row' }, labeledField(t('connNameLabel'), nameInp), labeledField(t('dialectLabel'), dialectOverrideSel)),
             el('div', { className: 'field-row' }, labeledField(t('proxyUrlLabel'), proxyUrlInp), labeledField(t('proxyTokenLabel'), proxyTokenInp)),
             el(

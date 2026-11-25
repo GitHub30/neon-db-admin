@@ -218,7 +218,7 @@ export function createEmptyConnectionTemplate(): ConnectionConfig {
     user: '',
     password: '',
     database: '',
-    ssl: true,
+    ssl: false,
     sslRejectUnauthorized: true,
     rememberSecrets: false,
     createdAt: Date.now(),

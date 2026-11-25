@@ -113,6 +113,7 @@ export function renderSidebar(container: HTMLElement, cb: SidebarCallbacks): voi
   const searchInput = el('input', {
     type: 'search',
     className: 'input input-sm',
+    autocomplete: 'off',
     placeholder: t('searchObjects'),
     value: treeFilter,
     'aria-label': t('searchObjects'),

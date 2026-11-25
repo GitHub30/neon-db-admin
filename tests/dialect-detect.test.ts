@@ -7,6 +7,7 @@ import {
   sortDatabasesUserFirst,
 } from '../src/core/dialect-detect.js';
 import { ProxyDatabaseAdapter } from '../src/adapters/proxy-adapter.js';
+import { createEmptyConnectionTemplate } from '../src/core/storage.js';
 import type { ConnectionConfig } from '../src/types/db.js';
 
 describe('dialect-detect & default connection naming', () => {
@@ -166,5 +167,24 @@ describe('ProxyDatabaseAdapter auto-detection and SHOW DATABASES introspection',
     adapter.setActiveDatabase('shop_prod');
     await adapter.introspectSchema();
     expect(calls[calls.length - 1].database).toBe('shop_prod');
+  });
+
+  it('defaults SSL/TLS to disabled in empty template and transmits explicit ssl: false', async () => {
+    const tpl = createEmptyConnectionTemplate();
+    expect(tpl.ssl).toBe(false);
+    expect(tpl.autoDetectDialect).toBe(true);
+
+    let capturedSsl: unknown = 'unset';
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body || '{}'));
+      capturedSsl = body.connection?.ssl;
+      return new Response(JSON.stringify({ ok: true, rows: [['8.0.36']], durationMs: 5 }), { status: 200 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const adapter = new ProxyDatabaseAdapter({ ...tpl, host: 'db.local', user: 'root' });
+    const res = await adapter.testConnection();
+    expect(res.ok).toBe(true);
+    expect(capturedSsl).toBe(false);
   });
 });

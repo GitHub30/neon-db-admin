@@ -92,7 +92,7 @@ export class ProxyDatabaseAdapter implements DatabaseAdapter {
       user: this.config.user,
       password: this.config.password,
       database: effectiveDb,
-      ssl: this.config.ssl,
+      ssl: Boolean(this.config.ssl),
       sslRejectUnauthorized: this.config.sslRejectUnauthorized !== false,
       url: effectiveUrl,
       filePath: this.config.filePath,
