@@ -1,9 +1,18 @@
 import { store } from '../core/state.js';
-import { getDialectBadgeInfo } from '../core/dialect.js';
 import { getLocaleOption, LOCALE_OPTIONS, t } from '../i18n/translations.js';
-import type { ThemeMode } from '../types/db.js';
+import type { DbDialect, ThemeMode } from '../types/db.js';
 import { el } from './dom.js';
 import { flagIcon, icon } from './icons.js';
+
+const DIALECT_BADGES: Record<DbDialect, { label: string; colorClass: string }> = {
+  sqlite: { label: 'SQLite', colorClass: 'badge-sqlite' },
+  mysql: { label: 'MySQL', colorClass: 'badge-mysql' },
+  mariadb: { label: 'MariaDB', colorClass: 'badge-mariadb' },
+  postgresql: { label: 'PostgreSQL', colorClass: 'badge-pg' },
+  d1: { label: 'D1', colorClass: 'badge-d1' },
+  'd1-binding': { label: 'D1 Binding', colorClass: 'badge-d1' },
+  libsql: { label: 'LibSQL', colorClass: 'badge-libsql' },
+};
 
 export interface TopbarCallbacks {
   onOpenConnections: () => void;
@@ -20,7 +29,7 @@ export function renderTopbar(container: HTMLElement, cb: TopbarCallbacks): void 
   cleanupLocaleListeners = null;
 
   const conn = store.activeConnection;
-  const badgeInfo = conn ? getDialectBadgeInfo(conn.dialect) : null;
+  const badgeInfo = conn ? DIALECT_BADGES[conn.dialect] : null;
   const currentLoc = getLocaleOption(store.locale);
 
   const cycleTheme = () => {

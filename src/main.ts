@@ -9,7 +9,6 @@ import type { ActiveView, ConnectionConfig } from './types/db.js';
 import { el, toast } from './ui/dom.js';
 import { icon, type IconName } from './ui/icons.js';
 import { renderTopbar } from './ui/topbar.js';
-import { renderSidebar } from './ui/sidebar.js';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
@@ -233,12 +232,18 @@ function mountApp(): void {
       renderTabsOnly();
     };
 
-    const renderPanels = async () => {
+    const renderSidebarLazy = async () => {
+      const { renderSidebar } = await import('./ui/sidebar.js');
       if (token !== viewRenderToken) return;
       renderSidebar(sidebarEl, {
         onOpenConnections: (editing) => openConnections(editing),
         onCreateTable: openCreateTable,
       });
+    };
+
+    const renderPanels = async () => {
+      if (token !== viewRenderToken) return;
+      void renderSidebarLazy();
 
       const schema = store.schema;
       statusEl.replaceChildren(
@@ -333,19 +338,16 @@ function mountApp(): void {
         setTimeout(() => {
           if (token !== viewRenderToken) return;
           renderTabsOnly();
+          statusEl.replaceChildren(
+            el('div', { className: 'statusbar-group' }, el('span', {}, 'Ready')),
+            el('div', { className: 'statusbar-group' }, el('span', { className: 'hide-sm' }, 'CORS: *'), el('span', {}, t('offlineReady')))
+          );
           setTimeout(() => {
             if (token !== viewRenderToken) return;
-            renderSidebar(sidebarEl, {
-              onOpenConnections: (editing) => openConnections(editing),
-              onCreateTable: openCreateTable,
-            });
-            statusEl.replaceChildren(
-              el('div', { className: 'statusbar-group' }, el('span', {}, 'Ready')),
-              el('div', { className: 'statusbar-group' }, el('span', { className: 'hide-sm' }, 'CORS: *'), el('span', {}, t('offlineReady')))
-            );
-          }, 40);
-        }, 35);
-      }, 20);
+            void renderSidebarLazy();
+          }, 50);
+        }, 30);
+      }, 15);
     } else {
       renderChrome();
       await renderPanels();
