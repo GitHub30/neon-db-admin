@@ -343,9 +343,9 @@ function mountApp(): void {
               el('div', { className: 'statusbar-group' }, el('span', {}, 'Ready')),
               el('div', { className: 'statusbar-group' }, el('span', { className: 'hide-sm' }, 'CORS: *'), el('span', {}, t('offlineReady')))
             );
-          }, 25);
-        }, 20);
-      }, 10);
+          }, 40);
+        }, 35);
+      }, 20);
     } else {
       renderChrome();
       await renderPanels();

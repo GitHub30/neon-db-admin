@@ -12,6 +12,14 @@ import type {
 } from '../types/db.js';
 import type { DatabaseAdapter } from './base.js';
 import { isMysqlLike, isPostgres, isSqliteLike, quoteIdent } from '../core/dialect.js';
+import {
+  inferDialectCandidates,
+  isDefinitiveDialectError,
+  isSystemDatabase,
+  parseConnectionUrlMeta,
+  refineDetectedDialect,
+  sortDatabasesUserFirst,
+} from '../core/dialect-detect.js';
 import { DEFAULT_WORKER_PROXY_URL } from '../i18n/translations.js';
 
 interface ProxyResponse {
@@ -29,13 +37,39 @@ interface ProxyResponse {
 
 const CLIENT_TIMEOUT_MS = 25000;
 
+function rewriteConnectionUrlDatabase(rawUrl: string | undefined, dbName: string | undefined): string | undefined {
+  if (!rawUrl) return rawUrl;
+  if (!dbName) return rawUrl;
+  try {
+    const u = new URL(rawUrl);
+    u.pathname = `/${encodeURIComponent(dbName)}`;
+    return u.toString();
+  } catch {
+    return rawUrl;
+  }
+}
+
 export class ProxyDatabaseAdapter implements DatabaseAdapter {
   readonly config: ConnectionConfig;
-  readonly dialect: DbDialect;
+  dialect: DbDialect;
+  private activeDatabase: string | undefined;
+  private resolvedPort: number | undefined;
 
   constructor(config: ConnectionConfig) {
     this.config = config;
     this.dialect = config.dialect;
+    this.resolvedPort = config.port;
+    const urlDb = parseConnectionUrlMeta(config.url).database;
+    this.activeDatabase = (config.database || urlDb || '').trim() || undefined;
+  }
+
+  setActiveDatabase(databaseName: string): void {
+    const clean = databaseName.trim();
+    this.activeDatabase = clean || undefined;
+  }
+
+  getActiveDatabase(): string | undefined {
+    return this.activeDatabase;
   }
 
   private getEndpoint(): string {
@@ -44,16 +78,23 @@ export class ProxyDatabaseAdapter implements DatabaseAdapter {
     return raw;
   }
 
-  private buildConnectionPayload() {
+  private buildConnectionPayload(overrides?: { port?: number; database?: string }) {
+    const effectiveDb = overrides?.database !== undefined ? overrides.database : this.activeDatabase;
+    const effectivePort = overrides?.port ?? this.resolvedPort ?? this.config.port;
+    const effectiveUrl =
+      this.config.url && effectiveDb && effectiveDb !== parseConnectionUrlMeta(this.config.url).database
+        ? rewriteConnectionUrlDatabase(this.config.url, effectiveDb)
+        : this.config.url;
+
     return {
       host: this.config.host,
-      port: this.config.port,
+      port: effectivePort,
       user: this.config.user,
       password: this.config.password,
-      database: this.config.database,
+      database: effectiveDb,
       ssl: this.config.ssl,
       sslRejectUnauthorized: this.config.sslRejectUnauthorized !== false,
-      url: this.config.url,
+      url: effectiveUrl,
       filePath: this.config.filePath,
       accountId: this.config.accountId,
       databaseId: this.config.databaseId,
@@ -62,11 +103,12 @@ export class ProxyDatabaseAdapter implements DatabaseAdapter {
     };
   }
 
-  private async request(body: Record<string, unknown>): Promise<ProxyResponse> {
+  private async request(body: Record<string, unknown>, dialectOverride?: DbDialect): Promise<ProxyResponse> {
     const endpoint = this.getEndpoint();
+    const useDialect = dialectOverride ?? this.dialect;
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      'X-DB-Dialect': this.dialect,
+      'X-DB-Dialect': useDialect,
     };
     if (this.config.proxyToken) {
       headers['X-Proxy-Token'] = this.config.proxyToken;
@@ -117,26 +159,52 @@ export class ProxyDatabaseAdapter implements DatabaseAdapter {
     // Stateless HTTP proxy
   }
 
-  async testConnection(): Promise<{ ok: boolean; version: string; durationMs: number; error?: string }> {
-    try {
-      const res = await this.request({
-        action: 'test',
-        dialect: this.dialect,
-        connection: this.buildConnectionPayload(),
-      });
-      return {
-        ok: true,
-        version: String(res.rows?.[0]?.[0] ?? this.dialect),
-        durationMs: res.durationMs ?? 0,
-      };
-    } catch (err) {
-      return {
-        ok: false,
-        version: '',
-        durationMs: 0,
-        error: err instanceof Error ? err.message : String(err),
-      };
+  async testConnection(): Promise<{ ok: boolean; version: string; durationMs: number; dialect?: DbDialect; error?: string }> {
+    const candidates = this.config.autoDetectDialect
+      ? inferDialectCandidates(this.config)
+      : [{ dialect: this.dialect, port: this.resolvedPort ?? this.config.port }];
+
+    let lastError = '';
+    for (const cand of candidates) {
+      try {
+        const res = await this.request(
+          {
+            action: 'test',
+            dialect: cand.dialect,
+            connection: this.buildConnectionPayload({ port: cand.port }),
+          },
+          cand.dialect
+        );
+        const version = String(res.rows?.[0]?.[0] ?? cand.dialect);
+        const refined = refineDetectedDialect(cand.dialect, version);
+        this.dialect = refined;
+        this.config.dialect = refined;
+        if (cand.port && !this.config.port) {
+          this.resolvedPort = cand.port;
+        }
+        return {
+          ok: true,
+          version,
+          durationMs: res.durationMs ?? 0,
+          dialect: refined,
+        };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        lastError = msg;
+        if (isDefinitiveDialectError(cand.dialect, msg)) {
+          this.dialect = cand.dialect;
+          this.config.dialect = cand.dialect;
+          return { ok: false, version: '', durationMs: 0, dialect: cand.dialect, error: msg };
+        }
+      }
     }
+
+    return {
+      ok: false,
+      version: '',
+      durationMs: 0,
+      error: lastError || 'Unable to connect via proxy.',
+    };
   }
 
   async query(sql: string, params?: unknown[], maxRows = 2000): Promise<QueryResult> {
@@ -180,41 +248,140 @@ export class ProxyDatabaseAdapter implements DatabaseAdapter {
     }));
   }
 
-  async introspectSchema(): Promise<DatabaseSchema> {
+  async listDatabases(): Promise<string[]> {
+    if (isMysqlLike(this.dialect)) {
+      try {
+        const res = await this.query('SHOW DATABASES', undefined, 500);
+        return sortDatabasesUserFirst(
+          res.rows.map((r) => String(r[0] ?? '')).filter(Boolean),
+          this.dialect
+        );
+      } catch {
+        return this.activeDatabase ? [this.activeDatabase] : [];
+      }
+    }
+    if (isPostgres(this.dialect)) {
+      try {
+        const res = await this.query(
+          'SELECT datname FROM pg_database WHERE datistemplate = false ORDER BY datname',
+          undefined,
+          500
+        );
+        return sortDatabasesUserFirst(
+          res.rows.map((r) => String(r[0] ?? '')).filter(Boolean),
+          this.dialect
+        );
+      } catch {
+        return this.activeDatabase ? [this.activeDatabase] : ['postgres'];
+      }
+    }
+    const single = this.activeDatabase || this.config.databaseId || this.config.filePath || this.config.name;
+    return single ? [single] : [];
+  }
+
+  async introspectSchema(targetDatabase?: string): Promise<DatabaseSchema> {
+    if (targetDatabase !== undefined) {
+      this.setActiveDatabase(targetDatabase);
+    }
     if (isMysqlLike(this.dialect)) return this.introspectMysql();
     if (isPostgres(this.dialect)) return this.introspectPostgres();
     return this.introspectSqliteLike();
   }
 
   private async introspectMysql(): Promise<DatabaseSchema> {
-    const [verRes, tblRes, colRes, fkRes, idxRes, viewRes, trgRes] = await this.executeBatch([
-      { sql: 'SELECT VERSION(), DATABASE()' },
-      {
-        sql: `SELECT TABLE_NAME, TABLE_ROWS, TABLE_COMMENT FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = 'BASE TABLE' ORDER BY TABLE_NAME`,
-      },
-      {
-        sql: `SELECT TABLE_NAME, COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT, COLUMN_KEY, EXTRA, COLUMN_COMMENT FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() ORDER BY TABLE_NAME, ORDINAL_POSITION`,
-      },
-      {
-        sql: `SELECT kcu.TABLE_NAME, kcu.CONSTRAINT_NAME, kcu.COLUMN_NAME, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME, rc.DELETE_RULE, rc.UPDATE_RULE
-              FROM information_schema.KEY_COLUMN_USAGE kcu
-              LEFT JOIN information_schema.REFERENTIAL_CONSTRAINTS rc
-                ON rc.CONSTRAINT_SCHEMA = kcu.TABLE_SCHEMA AND rc.CONSTRAINT_NAME = kcu.CONSTRAINT_NAME
-              WHERE kcu.TABLE_SCHEMA = DATABASE() AND kcu.REFERENCED_TABLE_NAME IS NOT NULL`,
-      },
-      {
-        sql: `SELECT TABLE_NAME, INDEX_NAME, NON_UNIQUE, COLUMN_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() ORDER BY TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX`,
-      },
-      {
-        sql: `SELECT TABLE_NAME, VIEW_DEFINITION FROM information_schema.VIEWS WHERE TABLE_SCHEMA = DATABASE() ORDER BY TABLE_NAME`,
-      },
-      {
-        sql: `SELECT TRIGGER_NAME, EVENT_OBJECT_TABLE, ACTION_TIMING, EVENT_MANIPULATION, ACTION_STATEMENT FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA = DATABASE()`,
-      },
-    ], 10000);
+    // 1. Fetch version, currently selected database, and full SHOW DATABASES list
+    let serverVersion = 'MySQL';
+    let currentDb = this.activeDatabase || '';
+    let availableDatabases: string[] = [];
 
-    const serverVersion = String(verRes.rows[0]?.[0] ?? 'MySQL');
-    const databaseName = String(verRes.rows[0]?.[1] ?? this.config.database ?? '');
+    try {
+      const [verRes, dbsRes] = await this.executeBatch(
+        [{ sql: 'SELECT VERSION(), DATABASE()' }, { sql: 'SHOW DATABASES' }],
+        1000
+      );
+      serverVersion = String(verRes.rows[0]?.[0] ?? 'MySQL');
+      const dbFromServer = verRes.rows[0]?.[1];
+      if (!currentDb && dbFromServer != null && String(dbFromServer).trim() !== '') {
+        currentDb = String(dbFromServer).trim();
+      }
+      availableDatabases = sortDatabasesUserFirst(
+        dbsRes.rows.map((r) => String(r[0] ?? '')).filter(Boolean),
+        this.dialect
+      );
+    } catch {
+      // Fallback when user lacks SHOW DATABASES privilege
+      const verRes = await this.query('SELECT VERSION(), DATABASE()', undefined, 10);
+      serverVersion = String(verRes.rows[0]?.[0] ?? 'MySQL');
+      const dbFromServer = verRes.rows[0]?.[1];
+      if (!currentDb && dbFromServer != null && String(dbFromServer).trim() !== '') {
+        currentDb = String(dbFromServer).trim();
+      }
+      if (currentDb) availableDatabases = [currentDb];
+    }
+
+    // Refine mysql -> mariadb if server reports MariaDB
+    const refined = refineDetectedDialect(this.dialect, serverVersion);
+    this.dialect = refined;
+    this.config.dialect = refined;
+
+    // When Database was unspecified, auto-pick the first user database so tables appear immediately
+    if (!currentDb && availableDatabases.length > 0) {
+      const firstUserDb = availableDatabases.find((d) => !isSystemDatabase(d, this.dialect));
+      currentDb = firstUserDb || availableDatabases[0];
+    }
+    if (currentDb) {
+      this.activeDatabase = currentDb;
+      if (!availableDatabases.includes(currentDb)) {
+        availableDatabases = sortDatabasesUserFirst([currentDb, ...availableDatabases], this.dialect);
+      }
+    }
+
+    if (!currentDb) {
+      return {
+        databaseName: '',
+        availableDatabases,
+        dialect: this.dialect,
+        serverVersion,
+        tables: [],
+        views: [],
+        triggers: [],
+      };
+    }
+
+    const [tblRes, colRes, fkRes, idxRes, viewRes, trgRes] = await this.executeBatch(
+      [
+        {
+          sql: `SELECT TABLE_NAME, TABLE_ROWS, TABLE_COMMENT FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_TYPE = 'BASE TABLE' ORDER BY TABLE_NAME`,
+          params: [currentDb],
+        },
+        {
+          sql: `SELECT TABLE_NAME, COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT, COLUMN_KEY, EXTRA, COLUMN_COMMENT FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? ORDER BY TABLE_NAME, ORDINAL_POSITION`,
+          params: [currentDb],
+        },
+        {
+          sql: `SELECT kcu.TABLE_NAME, kcu.CONSTRAINT_NAME, kcu.COLUMN_NAME, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME, rc.DELETE_RULE, rc.UPDATE_RULE
+                FROM information_schema.KEY_COLUMN_USAGE kcu
+                LEFT JOIN information_schema.REFERENTIAL_CONSTRAINTS rc
+                  ON rc.CONSTRAINT_SCHEMA = kcu.TABLE_SCHEMA AND rc.CONSTRAINT_NAME = kcu.CONSTRAINT_NAME
+                WHERE kcu.TABLE_SCHEMA = ? AND kcu.REFERENCED_TABLE_NAME IS NOT NULL`,
+          params: [currentDb],
+        },
+        {
+          sql: `SELECT TABLE_NAME, INDEX_NAME, NON_UNIQUE, COLUMN_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = ? ORDER BY TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX`,
+          params: [currentDb],
+        },
+        {
+          sql: `SELECT TABLE_NAME, VIEW_DEFINITION FROM information_schema.VIEWS WHERE TABLE_SCHEMA = ? ORDER BY TABLE_NAME`,
+          params: [currentDb],
+        },
+        {
+          sql: `SELECT TRIGGER_NAME, EVENT_OBJECT_TABLE, ACTION_TIMING, EVENT_MANIPULATION, ACTION_STATEMENT FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA = ?`,
+          params: [currentDb],
+        },
+      ],
+      10000
+    );
+
     const tableMap = new Map<string, TableSchema>();
 
     for (const r of tblRes.rows) {
@@ -275,7 +442,8 @@ export class ProxyDatabaseAdapter implements DatabaseAdapter {
     }
 
     return {
-      databaseName,
+      databaseName: currentDb,
+      availableDatabases,
       dialect: this.dialect,
       serverVersion,
       tables: Array.from(tableMap.values()),
@@ -291,64 +459,75 @@ export class ProxyDatabaseAdapter implements DatabaseAdapter {
   }
 
   private async introspectPostgres(): Promise<DatabaseSchema> {
-    const [verRes, tblRes, colRes, pkRes, fkRes, idxRes, viewRes, trgRes] = await this.executeBatch([
-      { sql: 'SELECT version(), current_database()' },
-      {
-        sql: `SELECT c.relname AS table_name, GREATEST(c.reltuples::bigint, 0) AS est_rows, obj_description(c.oid) AS comment, n.nspname AS schema_name
-              FROM pg_class c
-              JOIN pg_namespace n ON n.oid = c.relnamespace
-              WHERE n.nspname = ANY(current_schemas(false)) AND c.relkind IN ('r', 'p')
-              ORDER BY c.relname`,
-      },
-      {
-        sql: `SELECT table_name, column_name, udt_name, data_type, is_nullable, column_default, is_identity
-              FROM information_schema.columns
-              WHERE table_schema = ANY(current_schemas(false))
-              ORDER BY table_name, ordinal_position`,
-      },
-      {
-        sql: `SELECT c.relname AS table_name, a.attname AS column_name
-              FROM pg_constraint con
-              JOIN pg_class c ON c.oid = con.conrelid
-              JOIN pg_namespace n ON n.oid = c.relnamespace
-              JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = ANY(con.conkey)
-              WHERE n.nspname = ANY(current_schemas(false)) AND con.contype = 'p'`,
-      },
-      {
-        // Use pg_constraint with unnest + ordinality to avoid composite FK Cartesian products (H10)
-        sql: `SELECT c.relname AS table_name, con.conname AS constraint_name,
-                     sa.attname AS col_name, fc.relname AS ref_table, fa.attname AS ref_col,
-                     CASE con.confdeltype WHEN 'c' THEN 'CASCADE' WHEN 'n' THEN 'SET NULL' WHEN 'r' THEN 'RESTRICT' ELSE 'NO ACTION' END AS delete_rule,
-                     CASE con.confupdtype WHEN 'c' THEN 'CASCADE' WHEN 'n' THEN 'SET NULL' WHEN 'r' THEN 'RESTRICT' ELSE 'NO ACTION' END AS update_rule
-              FROM pg_constraint con
-              JOIN pg_class c ON c.oid = con.conrelid
-              JOIN pg_namespace n ON n.oid = c.relnamespace
-              JOIN pg_class fc ON fc.oid = con.confrelid
-              JOIN LATERAL unnest(con.conkey, con.confkey) WITH ORDINALITY AS u(attnum, refnum, ord) ON true
-              JOIN pg_attribute sa ON sa.attrelid = c.oid AND sa.attnum = u.attnum
-              JOIN pg_attribute fa ON fa.attrelid = fc.oid AND fa.attnum = u.refnum
-              WHERE n.nspname = ANY(current_schemas(false)) AND con.contype = 'f'`,
-      },
-      {
-        sql: `SELECT t.relname AS tablename, i.relname AS indexname, ix.indisunique, ix.indisprimary,
-                     array_to_string(ARRAY(SELECT a.attname FROM unnest(ix.indkey) WITH ORDINALITY AS k(attnum, ord) JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = k.attnum ORDER BY k.ord), ',') AS cols
-              FROM pg_index ix
-              JOIN pg_class t ON t.oid = ix.indrelid
-              JOIN pg_class i ON i.oid = ix.indexrelid
-              JOIN pg_namespace n ON n.oid = t.relnamespace
-              WHERE n.nspname = ANY(current_schemas(false))
-              ORDER BY t.relname, i.relname`,
-      },
-      {
-        sql: `SELECT table_name, view_definition FROM information_schema.views WHERE table_schema = ANY(current_schemas(false)) ORDER BY table_name`,
-      },
-      {
-        sql: `SELECT trigger_name, event_object_table, action_timing, event_manipulation, action_statement FROM information_schema.triggers WHERE trigger_schema = ANY(current_schemas(false))`,
-      },
-    ], 10000);
+    const [verRes, tblRes, colRes, pkRes, fkRes, idxRes, viewRes, trgRes] = await this.executeBatch(
+      [
+        { sql: 'SELECT version(), current_database()' },
+        {
+          sql: `SELECT c.relname AS table_name, GREATEST(c.reltuples::bigint, 0) AS est_rows, obj_description(c.oid) AS comment, n.nspname AS schema_name
+                FROM pg_class c
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE n.nspname = ANY(current_schemas(false)) AND c.relkind IN ('r', 'p')
+                ORDER BY c.relname`,
+        },
+        {
+          sql: `SELECT table_name, column_name, udt_name, data_type, is_nullable, column_default, is_identity
+                FROM information_schema.columns
+                WHERE table_schema = ANY(current_schemas(false))
+                ORDER BY table_name, ordinal_position`,
+        },
+        {
+          sql: `SELECT c.relname AS table_name, a.attname AS column_name
+                FROM pg_constraint con
+                JOIN pg_class c ON c.oid = con.conrelid
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = ANY(con.conkey)
+                WHERE n.nspname = ANY(current_schemas(false)) AND con.contype = 'p'`,
+        },
+        {
+          // Use pg_constraint with unnest + ordinality to avoid composite FK Cartesian products (H10)
+          sql: `SELECT c.relname AS table_name, con.conname AS constraint_name,
+                       sa.attname AS col_name, fc.relname AS ref_table, fa.attname AS ref_col,
+                       CASE con.confdeltype WHEN 'c' THEN 'CASCADE' WHEN 'n' THEN 'SET NULL' WHEN 'r' THEN 'RESTRICT' ELSE 'NO ACTION' END AS delete_rule,
+                       CASE con.confupdtype WHEN 'c' THEN 'CASCADE' WHEN 'n' THEN 'SET NULL' WHEN 'r' THEN 'RESTRICT' ELSE 'NO ACTION' END AS update_rule
+                FROM pg_constraint con
+                JOIN pg_class c ON c.oid = con.conrelid
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                JOIN pg_class fc ON fc.oid = con.confrelid
+                JOIN LATERAL unnest(con.conkey, con.confkey) WITH ORDINALITY AS u(attnum, refnum, ord) ON true
+                JOIN pg_attribute sa ON sa.attrelid = c.oid AND sa.attnum = u.attnum
+                JOIN pg_attribute fa ON fa.attrelid = fc.oid AND fa.attnum = u.refnum
+                WHERE n.nspname = ANY(current_schemas(false)) AND con.contype = 'f'`,
+        },
+        {
+          sql: `SELECT t.relname AS tablename, i.relname AS indexname, ix.indisunique, ix.indisprimary,
+                       array_to_string(ARRAY(SELECT a.attname FROM unnest(ix.indkey) WITH ORDINALITY AS k(attnum, ord) JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = k.attnum ORDER BY k.ord), ',') AS cols
+                FROM pg_index ix
+                JOIN pg_class t ON t.oid = ix.indrelid
+                JOIN pg_class i ON i.oid = ix.indexrelid
+                JOIN pg_namespace n ON n.oid = t.relnamespace
+                WHERE n.nspname = ANY(current_schemas(false))
+                ORDER BY t.relname, i.relname`,
+        },
+        {
+          sql: `SELECT table_name, view_definition FROM information_schema.views WHERE table_schema = ANY(current_schemas(false)) ORDER BY table_name`,
+        },
+        {
+          sql: `SELECT trigger_name, event_object_table, action_timing, event_manipulation, action_statement FROM information_schema.triggers WHERE trigger_schema = ANY(current_schemas(false))`,
+        },
+      ],
+      10000
+    );
 
     const serverVersion = String(verRes.rows[0]?.[0] ?? 'PostgreSQL').split(',')[0];
-    const databaseName = String(verRes.rows[0]?.[1] ?? this.config.database ?? 'postgres');
+    const databaseName = String(verRes.rows[0]?.[1] ?? this.activeDatabase ?? this.config.database ?? 'postgres');
+    this.activeDatabase = databaseName;
+
+    // Fetch list of accessible databases on the PostgreSQL server (graceful if restricted)
+    let availableDatabases = await this.listDatabases();
+    if (!availableDatabases.includes(databaseName)) {
+      availableDatabases = sortDatabasesUserFirst([databaseName, ...availableDatabases], this.dialect);
+    }
+
     const pkSet = new Set(pkRes.rows.map((r) => `${r[0]}.${r[1]}`));
     const tableMap = new Map<string, TableSchema>();
 
@@ -399,7 +578,10 @@ export class ProxyDatabaseAdapter implements DatabaseAdapter {
     for (const r of idxRes.rows) {
       const tbl = tableMap.get(String(r[0]));
       if (!tbl) continue;
-      const cols = String(r[4] ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+      const cols = String(r[4] ?? '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
       const unique = Boolean(r[2]);
       const primary = Boolean(r[3]);
       tbl.indexes.push({ name: String(r[1]), columns: cols, unique, primary });
@@ -411,6 +593,7 @@ export class ProxyDatabaseAdapter implements DatabaseAdapter {
 
     return {
       databaseName,
+      availableDatabases,
       dialect: this.dialect,
       serverVersion,
       tables: Array.from(tableMap.values()),
@@ -426,10 +609,13 @@ export class ProxyDatabaseAdapter implements DatabaseAdapter {
   }
 
   private async introspectSqliteLike(): Promise<DatabaseSchema> {
-    const [verRes, masterRes] = await this.executeBatch([
-      { sql: 'SELECT sqlite_version() AS version' },
-      { sql: `SELECT type, name, tbl_name, sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY type, name` },
-    ], 10000);
+    const [verRes, masterRes] = await this.executeBatch(
+      [
+        { sql: 'SELECT sqlite_version() AS version' },
+        { sql: `SELECT type, name, tbl_name, sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY type, name` },
+      ],
+      10000
+    );
 
     const serverVersion = `${this.dialect.toUpperCase()} (SQLite ${verRes.rows[0]?.[0] ?? '3.x'})`;
     const rawTables: Array<{ name: string; sql: string }> = [];
@@ -445,7 +631,6 @@ export class ProxyDatabaseAdapter implements DatabaseAdapter {
     }
 
     const tables: TableSchema[] = [];
-    // Batch up to 12 tables per HTTP request (3 PRAGMAs per table = 36 statements <= 50 limit)
     for (let start = 0; start < rawTables.length; start += 12) {
       const slice = rawTables.slice(start, start + 12);
       const batchStmts: Array<{ sql: string }> = [];
@@ -459,7 +644,6 @@ export class ProxyDatabaseAdapter implements DatabaseAdapter {
       }
       const batchRes = await this.executeBatch(batchStmts, 10000);
 
-      // Collect index_info queries in one batch so Schema Health Audit has real index columns (H10)
       const idxQueries: Array<{ tblIdx: number; idxName: string; unique: boolean; primary: boolean }> = [];
       const partialTables: TableSchema[] = [];
 
@@ -527,8 +711,10 @@ export class ProxyDatabaseAdapter implements DatabaseAdapter {
       tables.push(...partialTables);
     }
 
+    const dbName = this.activeDatabase || this.config.databaseId || this.config.filePath || this.config.name;
     return {
-      databaseName: this.config.database || this.config.databaseId || this.config.filePath || this.config.name,
+      databaseName: dbName,
+      availableDatabases: dbName ? [dbName] : [],
       dialect: this.dialect,
       serverVersion,
       tables,

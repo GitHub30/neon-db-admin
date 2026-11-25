@@ -173,6 +173,15 @@ const ja = {
   proxyOptPhp: 'PHP プロキシ (proxy.php)',
   proxyOptNode: 'Node.js プロキシ (proxy-node.mjs)',
   dropTableTitle: 'テーブル削除',
+  databases: 'データベース',
+  advancedSettingsSummary: '詳細設定（接続名・プロキシURL・トークン・DB種別）',
+  dialectAutoOption: '自動判別 (MySQL / MariaDB / PostgreSQL / 接続URL)',
+  portOptionalPlaceholder: '自動 (3306 / 5432)',
+  databaseOptionalLabel: 'Database (任意)',
+  databaseOptionalPlaceholder: '未指定でDB一覧を取得',
+  connNameAutoHint: '空欄時は $username@$host',
+  specialDbToggleBtn: 'Cloudflare D1 / LibSQL / サーバーSQLite を指定',
+  standardDbToggleBtn: '通常の SQL サーバー（自動判別）へ戻る',
 } as const;
 
 export type TranslationKey = keyof typeof ja;

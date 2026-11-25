@@ -384,7 +384,7 @@ function createPdo(string $dialect, array $conn, string $sqliteAllowedDir, int $
     $db = validateDsnDbName($db);
 
     if ($dialect === 'mysql' || $dialect === 'mariadb') {
-        $port = (int)($conn['port'] ?? 3306);
+        $port = !empty($conn['port']) ? (int)$conn['port'] : 3306;
         if ($port < 1 || $port > 65535) throw new InvalidArgumentException('Invalid port.');
         $dsn = sprintf('mysql:host=%s;port=%d;charset=utf8mb4', $host, $port);
         if ($db !== '') {
@@ -397,7 +397,7 @@ function createPdo(string $dialect, array $conn, string $sqliteAllowedDir, int $
     }
 
     if ($dialect === 'postgresql') {
-        $port = (int)($conn['port'] ?? 5432);
+        $port = !empty($conn['port']) ? (int)$conn['port'] : 5432;
         if ($port < 1 || $port > 65535) throw new InvalidArgumentException('Invalid port.');
         $dsn = sprintf('pgsql:host=%s;port=%d;dbname=%s', $host, $port, $db !== '' ? $db : 'postgres');
         if ($ssl) {

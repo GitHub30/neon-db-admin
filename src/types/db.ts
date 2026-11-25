@@ -23,6 +23,7 @@ export interface ConnectionConfig {
   apiToken?: string;
   authToken?: string;
   rememberSecrets?: boolean;
+  autoDetectDialect?: boolean;
   sampleId?: 'empty';
   color?: string;
   createdAt: number;
@@ -99,6 +100,7 @@ export interface TableSchema {
 
 export interface DatabaseSchema {
   databaseName: string;
+  availableDatabases?: string[];
   dialect: DbDialect;
   serverVersion: string;
   tables: TableSchema[];

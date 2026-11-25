@@ -34,6 +34,11 @@ class AppStore {
   activeConnection: ConnectionConfig | null = null;
   adapter: DatabaseAdapter | null = null;
   schema: DatabaseSchema | null = null;
+  availableDatabases: string[] = [];
+  activeDatabase: string | null = null;
+  databaseSchemas: Record<string, DatabaseSchema> = {};
+  expandedDatabases = new Set<string>();
+  loadingDatabase: string | null = null;
   schemaRevision = 0;
   selectedTable: string | null = null;
   activeView: ActiveView = 'data';
@@ -49,6 +54,7 @@ class AppStore {
   loadingStatus: string | null = null;
 
   private connectSeq = 0;
+  private dbSwitchSeq = 0;
   private listeners = new Set<StateListener>();
 
   constructor() {
@@ -104,6 +110,13 @@ class AppStore {
     if (switchToView) this.activeView = switchToView;
     this.sidebarOpen = false;
     this.notify();
+  }
+
+  async selectTableInDatabase(dbName: string, tableName: string, switchToView?: ActiveView): Promise<void> {
+    if (this.activeDatabase !== dbName) {
+      await this.switchDatabase(dbName, false);
+    }
+    this.selectTable(tableName, switchToView);
   }
 
   openSqlWithQuery(sql: string): void {
@@ -209,15 +222,39 @@ class AppStore {
       const nextSchema = await nextAdapter.introspectSchema();
 
       if (mySeq !== this.connectSeq) {
-        // Superseded by a newer connectTo call — dispose cleanly
         await nextAdapter.disconnect();
         return;
       }
 
+      // Sync auto-detected dialect back onto saved connection so future connects skip probing
+      const resolvedConn: ConnectionConfig = {
+        ...conn,
+        dialect: nextSchema.dialect,
+        autoDetectDialect: false,
+      };
+      const savedIdx = this.connections.findIndex((c) => c.id === conn.id);
+      if (savedIdx >= 0) {
+        this.connections[savedIdx] = resolvedConn;
+        saveConnections(this.connections);
+      }
+
       const prevAdapter = this.adapter;
       this.adapter = nextAdapter;
-      this.activeConnection = conn;
+      this.activeConnection = resolvedConn;
       this.schema = nextSchema;
+      this.availableDatabases =
+        nextSchema.availableDatabases && nextSchema.availableDatabases.length > 0
+          ? nextSchema.availableDatabases
+          : nextSchema.databaseName
+            ? [nextSchema.databaseName]
+            : [];
+      this.activeDatabase = nextSchema.databaseName || this.availableDatabases[0] || null;
+      this.databaseSchemas = {};
+      this.expandedDatabases = new Set<string>();
+      if (this.activeDatabase) {
+        this.databaseSchemas[this.activeDatabase] = nextSchema;
+        this.expandedDatabases.add(this.activeDatabase);
+      }
       this.schemaRevision++;
       this.selectedTable = nextSchema.tables[0]?.name ?? nextSchema.views[0]?.name ?? null;
       this.activeErModel = null;
@@ -238,9 +275,67 @@ class AppStore {
     }
   }
 
+  async switchDatabase(dbName: string, selectFirstTable = true): Promise<void> {
+    if (!this.adapter) return;
+    const mySeq = ++this.dbSwitchSeq;
+    this.loadingDatabase = dbName;
+    this.expandedDatabases.add(dbName);
+    this.notify();
+
+    try {
+      this.adapter.setActiveDatabase?.(dbName);
+      const nextSchema = await this.adapter.introspectSchema(dbName);
+      if (mySeq !== this.dbSwitchSeq) return;
+      this.activeDatabase = nextSchema.databaseName || dbName;
+      this.schema = nextSchema;
+      this.databaseSchemas[this.activeDatabase] = nextSchema;
+      if (nextSchema.availableDatabases && nextSchema.availableDatabases.length > 0) {
+        this.availableDatabases = nextSchema.availableDatabases;
+      } else if (!this.availableDatabases.includes(this.activeDatabase)) {
+        this.availableDatabases = [...this.availableDatabases, this.activeDatabase];
+      }
+      this.expandedDatabases.add(this.activeDatabase);
+      this.schemaRevision++;
+      if (selectFirstTable) {
+        this.selectedTable = nextSchema.tables[0]?.name ?? nextSchema.views[0]?.name ?? null;
+      }
+      this.activeErModel = null;
+    } finally {
+      if (mySeq === this.dbSwitchSeq) {
+        this.loadingDatabase = null;
+        this.notify();
+      }
+    }
+  }
+
+  async toggleDatabaseNode(dbName: string): Promise<void> {
+    const isExpanded = this.expandedDatabases.has(dbName);
+    if (isExpanded && this.activeDatabase === dbName) {
+      this.expandedDatabases.delete(dbName);
+      this.notify();
+      return;
+    }
+    this.expandedDatabases.add(dbName);
+    if (this.activeDatabase !== dbName || !this.databaseSchemas[dbName]) {
+      await this.switchDatabase(dbName);
+    } else {
+      this.notify();
+    }
+  }
+
   async refreshSchema(): Promise<void> {
     if (!this.adapter) return;
-    this.schema = await this.adapter.introspectSchema();
+    const nextSchema = await this.adapter.introspectSchema(this.activeDatabase ?? undefined);
+    this.schema = nextSchema;
+    const activeDb = nextSchema.databaseName || this.activeDatabase;
+    if (activeDb) {
+      this.activeDatabase = activeDb;
+      this.databaseSchemas[activeDb] = nextSchema;
+      this.expandedDatabases.add(activeDb);
+    }
+    if (nextSchema.availableDatabases && nextSchema.availableDatabases.length > 0) {
+      this.availableDatabases = nextSchema.availableDatabases;
+    }
     this.schemaRevision++;
     if (
       this.selectedTable &&

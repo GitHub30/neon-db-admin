@@ -37,7 +37,8 @@ export type IconName =
   | 'zoomOut'
   | 'maximize'
   | 'globe'
-  | 'chevronDown';
+  | 'chevronDown'
+  | 'chevronRight';
 
 const PATHS: Record<IconName, string> = {
   database: 'M12 3C7.58 3 4 4.34 4 6v12c0 1.66 3.58 3 8 3s8-1.34 8-3V6c0-1.66-3.58-3-8-3zm0 2c3.87 0 6 .96 6 1s-2.13 1-6 1-6-.96-6-1 2.13-1 6-1zm0 14c-3.87 0-6-.96-6-1v-3.1c1.47.69 3.63 1.1 6 1.1s4.53-.41 6-1.1V18c0 .04-2.13 1-6 1zm0-5c-3.87 0-6-.96-6-1V9.9c1.47.69 3.63 1.1 6 1.1s4.53-.41 6-1.1V13c0 .04-2.13 1-6 1z',
@@ -79,6 +80,7 @@ const PATHS: Record<IconName, string> = {
   maximize: 'M4 4h6v2H6v4H4V4zm10 0h6v6h-2V6h-4V4zM4 14h2v4h4v2H4v-6zm14 4v-4h2v6h-6v-2h4z',
   globe: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm7.9 9h-3.1a15 15 0 0 0-1.3-5A8 8 0 0 1 19.9 11zM12 4.1c1 1.3 1.9 3.7 2.2 6.9H9.8c.3-3.2 1.2-5.6 2.2-6.9zM4.1 13h3.1c.2 1.8.6 3.5 1.3 5A8 8 0 0 1 4.1 13zm3.1-2H4.1a8 8 0 0 1 4.4-5 15 15 0 0 0-1.3 5zm4.8 8.9c-1-1.3-1.9-3.7-2.2-6.9h4.4c-.3 3.2-1.2 5.6-2.2 6.9zm3.5-1.9c.7-1.5 1.1-3.2 1.3-5h3.1a8 8 0 0 1-4.4 5z',
   chevronDown: 'M7 10l5 5 5-5H7z',
+  chevronRight: 'M10 7l5 5-5 5V7z',
 };
 
 const SVG_NS = 'http://www.w3.org/2000/svg';

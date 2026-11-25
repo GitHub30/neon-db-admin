@@ -1,9 +1,13 @@
 import { store } from '../core/state.js';
 import { generateSelectSql, getDialectBadgeInfo, quoteIdent } from '../core/dialect.js';
 import { t } from '../i18n/translations.js';
-import type { ConnectionConfig } from '../types/db.js';
+import type { ConnectionConfig, DatabaseSchema, DbDialect } from '../types/db.js';
 import { confirmSqlModal, el, toast } from './dom.js';
 import { icon } from './icons.js';
+
+const MYSQL_SYSTEM_DBS = new Set(['information_schema', 'mysql', 'performance_schema', 'sys']);
+const isSystemDatabase = (dbName: string, dialect: DbDialect) =>
+  (dialect === 'mysql' || dialect === 'mariadb') && MYSQL_SYSTEM_DBS.has(dbName.toLowerCase());
 
 let treeFilter = '';
 
@@ -20,7 +24,7 @@ export function renderSidebar(container: HTMLElement, cb: SidebarCallbacks): voi
     ? store.connections.find((c) => c.id === activeConn.id)
     : undefined;
 
-  // Compact Connection Switcher Dropdown (replaces multi-row connection list)
+  // Compact Connection Switcher Dropdown
   const connSelect = el(
     'select',
     {
@@ -157,55 +161,21 @@ export function renderSidebar(container: HTMLElement, cb: SidebarCallbacks): voi
   renderBody(bodyEl);
   container.replaceChildren(header, bodyEl);
 
-  function renderBody(host: HTMLElement) {
-    host.replaceChildren();
-    const q = treeFilter.trim().toLowerCase();
-
-    const schema = store.schema;
-    if (!schema) {
-      host.append(
-        el(
-          'div',
-          { style: { padding: '12px', color: 'var(--ink-muted)', fontSize: '0.8rem' } },
-          store.loadingStatus || t('disconnected')
-        )
-      );
-      return;
-    }
+  function renderDbChildren(dbName: string, dbSchema: DatabaseSchema, q: string): HTMLElement {
+    const wrap = el('div', { className: 'db-tree-children' });
+    const isActiveDb = store.activeDatabase === dbName;
 
     // Tables
-    const tables = schema.tables.filter((tbl) => !q || tbl.name.toLowerCase().includes(q));
-    const tableSection = el(
-      'div',
-      { className: 'tree-section' },
-      el(
-        'div',
-        { className: 'tree-section-head' },
-        el('span', {}, `${t('tables')} (${tables.length})`),
-        el(
-          'button',
-          {
-            type: 'button',
-            className: 'btn btn-ghost btn-sm',
-            style: { padding: '2px 6px', minHeight: '28px', minWidth: '28px' },
-            title: t('createTable'),
-            'aria-label': t('createTable'),
-            onClick: cb.onCreateTable,
-          },
-          icon('plus', 13)
-        )
-      )
-    );
-
-    if (tables.length === 0) {
-      tableSection.append(
-        el('div', { style: { padding: '6px 8px', color: 'var(--ink-muted)', fontSize: '0.78rem' } }, t('noTables'))
+    const tables = dbSchema.tables.filter((tbl) => !q || tbl.name.toLowerCase().includes(q) || dbName.toLowerCase().includes(q));
+    if (tables.length === 0 && !q) {
+      wrap.append(
+        el('div', { style: { padding: '4px 8px', color: 'var(--ink-muted)', fontSize: '0.78rem' } }, t('noTables'))
       );
     }
 
     for (const tbl of tables) {
-      const isSelected = store.selectedTable === tbl.name;
-      tableSection.append(
+      const isSelected = isActiveDb && store.selectedTable === tbl.name;
+      wrap.append(
         el(
           'div',
           { style: { display: 'flex', alignItems: 'center', gap: '2px' } },
@@ -215,7 +185,13 @@ export function renderSidebar(container: HTMLElement, cb: SidebarCallbacks): voi
               type: 'button',
               className: `tree-item ${isSelected ? 'active' : ''}`,
               style: { flex: '1', minWidth: '0' },
-              onClick: () => store.selectTable(tbl.name, store.activeView === 'structure' ? 'structure' : 'data'),
+              onClick: async () => {
+                try {
+                  await store.selectTableInDatabase(dbName, tbl.name, store.activeView === 'structure' ? 'structure' : 'data');
+                } catch (err) {
+                  toast(err instanceof Error ? err.message : String(err), 'error');
+                }
+              },
             },
             el('span', { className: 'tree-item-main' }, icon('table', 14), el('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis' } }, tbl.name)),
             tbl.rowCount !== undefined ? el('span', { className: 'tree-item-meta' }, tbl.rowCount.toLocaleString()) : null
@@ -228,7 +204,12 @@ export function renderSidebar(container: HTMLElement, cb: SidebarCallbacks): voi
               style: { padding: '2px 5px', minHeight: '28px', minWidth: '28px' },
               title: `SELECT * FROM ${tbl.name}`,
               'aria-label': `SELECT * FROM ${tbl.name}`,
-              onClick: () => store.openSqlWithQuery(generateSelectSql(tbl.name, schema.dialect, { limit: 100 }) + ';'),
+              onClick: async () => {
+                if (store.activeDatabase !== dbName) {
+                  await store.switchDatabase(dbName, false);
+                }
+                store.openSqlWithQuery(generateSelectSql(tbl.name, dbSchema.dialect, { limit: 100 }) + ';');
+              },
             },
             icon('code', 12)
           ),
@@ -241,7 +222,10 @@ export function renderSidebar(container: HTMLElement, cb: SidebarCallbacks): voi
               title: `DROP TABLE ${tbl.name}`,
               'aria-label': `DROP TABLE ${tbl.name}`,
               onClick: async () => {
-                const sql = `DROP TABLE ${quoteIdent(tbl.name, schema.dialect)};`;
+                if (store.activeDatabase !== dbName) {
+                  await store.switchDatabase(dbName, false);
+                }
+                const sql = `DROP TABLE ${quoteIdent(tbl.name, dbSchema.dialect)};`;
                 const ok = await confirmSqlModal({ title: `${t('dropTableTitle')}: ${tbl.name}`, sql, danger: true });
                 if (!ok || !store.adapter) return;
                 try {
@@ -258,55 +242,159 @@ export function renderSidebar(container: HTMLElement, cb: SidebarCallbacks): voi
         )
       );
     }
-    host.append(tableSection);
 
     // Views
-    const views = schema.views.filter((v) => !q || v.name.toLowerCase().includes(q));
+    const views = dbSchema.views.filter((v) => !q || v.name.toLowerCase().includes(q) || dbName.toLowerCase().includes(q));
     if (views.length > 0) {
-      const viewSection = el(
-        'div',
-        { className: 'tree-section' },
-        el('div', { className: 'tree-section-head' }, el('span', {}, `${t('views')} (${views.length})`))
-      );
+      wrap.append(el('div', { className: 'tree-section-head', style: { marginTop: '4px' } }, el('span', {}, `${t('views')} (${views.length})`)));
       for (const v of views) {
-        viewSection.append(
+        wrap.append(
           el(
             'button',
             {
               type: 'button',
-              className: `tree-item ${store.selectedTable === v.name ? 'active' : ''}`,
-              onClick: () => store.selectTable(v.name, 'data'),
+              className: `tree-item ${isActiveDb && store.selectedTable === v.name ? 'active' : ''}`,
+              onClick: async () => {
+                await store.selectTableInDatabase(dbName, v.name, 'data');
+              },
             },
             el('span', { className: 'tree-item-main' }, icon('eye', 14), el('span', {}, v.name))
           )
         );
       }
-      host.append(viewSection);
     }
 
     // Triggers
-    const triggers = schema.triggers.filter((tr) => !q || tr.name.toLowerCase().includes(q));
+    const triggers = dbSchema.triggers.filter((tr) => !q || tr.name.toLowerCase().includes(q) || dbName.toLowerCase().includes(q));
     if (triggers.length > 0) {
-      const trgSection = el(
-        'div',
-        { className: 'tree-section' },
-        el('div', { className: 'tree-section-head' }, el('span', {}, `${t('triggers')} (${triggers.length})`))
-      );
+      wrap.append(el('div', { className: 'tree-section-head', style: { marginTop: '4px' } }, el('span', {}, `${t('triggers')} (${triggers.length})`)));
       for (const tr of triggers) {
-        trgSection.append(
+        wrap.append(
           el(
             'button',
             {
               type: 'button',
               className: 'tree-item',
-              onClick: () => store.openSqlWithQuery(`-- Trigger: ${tr.name} on ${tr.table}\n${tr.sql};`),
+              onClick: async () => {
+                if (store.activeDatabase !== dbName) {
+                  await store.switchDatabase(dbName, false);
+                }
+                store.openSqlWithQuery(`-- Trigger: ${tr.name} on ${tr.table}\n${tr.sql};`);
+              },
             },
             el('span', { className: 'tree-item-main' }, icon('zap', 14), el('span', {}, tr.name)),
             el('span', { className: 'tree-item-meta' }, tr.table)
           )
         );
       }
-      host.append(trgSection);
     }
+
+    return wrap;
+  }
+
+  function renderBody(host: HTMLElement) {
+    host.replaceChildren();
+    const q = treeFilter.trim().toLowerCase();
+
+    const schema = store.schema;
+    if (!schema) {
+      host.append(
+        el(
+          'div',
+          { style: { padding: '12px', color: 'var(--ink-muted)', fontSize: '0.8rem' } },
+          store.loadingStatus || t('disconnected')
+        )
+      );
+      return;
+    }
+
+    const dbList =
+      store.availableDatabases.length > 0
+        ? store.availableDatabases
+        : schema.databaseName
+          ? [schema.databaseName]
+          : [store.activeConnection?.name || 'database'];
+
+    const rootSection = el(
+      'div',
+      { className: 'tree-section' },
+      el('div', { className: 'tree-section-head' }, el('span', {}, `${t('databases')} (${dbList.length})`))
+    );
+
+    for (const dbName of dbList) {
+      const cachedSchema = store.databaseSchemas[dbName];
+      const dbMatches = !q || dbName.toLowerCase().includes(q);
+      const childrenMatch = Boolean(
+        q &&
+          cachedSchema &&
+          (cachedSchema.tables.some((tbl) => tbl.name.toLowerCase().includes(q)) ||
+            cachedSchema.views.some((v) => v.name.toLowerCase().includes(q)) ||
+            cachedSchema.triggers.some((tr) => tr.name.toLowerCase().includes(q)))
+      );
+      if (q && !dbMatches && !childrenMatch) continue;
+
+      const isActive = store.activeDatabase === dbName;
+      const isExpanded = store.expandedDatabases.has(dbName) || childrenMatch;
+      const isLoading = store.loadingDatabase === dbName;
+      const isSys = isSystemDatabase(dbName, schema.dialect);
+
+      const node = el(
+        'div',
+        { className: 'db-tree-node', dataset: { db: dbName } },
+        el(
+          'div',
+          { className: 'db-tree-head-row' },
+          el(
+            'button',
+            {
+              type: 'button',
+              className: `db-tree-head ${isActive ? 'active' : ''} ${isSys ? 'system-db' : ''}`,
+              'aria-expanded': String(isExpanded),
+              onClick: async () => {
+                try {
+                  await store.toggleDatabaseNode(dbName);
+                } catch (err) {
+                  toast(err instanceof Error ? err.message : String(err), 'error', 4500);
+                }
+              },
+            },
+            el(
+              'span',
+              { className: 'tree-item-main' },
+              icon(isExpanded ? 'chevronDown' : 'chevronRight', 14),
+              icon('database', 13),
+              el('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis' } }, dbName)
+            ),
+            el(
+              'span',
+              { className: 'tree-item-meta' },
+              isLoading ? '...' : cachedSchema ? String(cachedSchema.tables.length) : ''
+            )
+          ),
+          isActive
+            ? el(
+                'button',
+                {
+                  type: 'button',
+                  className: 'btn btn-ghost btn-sm',
+                  style: { padding: '2px 5px', minHeight: '28px', minWidth: '28px' },
+                  title: t('createTable'),
+                  'aria-label': t('createTable'),
+                  onClick: cb.onCreateTable,
+                },
+                icon('plus', 13)
+              )
+            : null
+        )
+      );
+
+      if (isExpanded && cachedSchema) {
+        node.append(renderDbChildren(dbName, cachedSchema, q));
+      }
+
+      rootSection.append(node);
+    }
+
+    host.append(rootSection);
   }
 }

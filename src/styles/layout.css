@@ -273,6 +273,81 @@
   flex-shrink: 0;
 }
 
+.db-tree-node {
+  margin-bottom: 4px;
+}
+
+.db-tree-head-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.db-tree-head {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 6px 6px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-primary);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.db-tree-head:hover {
+  background: var(--bg-hover);
+}
+
+.db-tree-head.active {
+  background: var(--bg-subtle);
+  color: var(--accent);
+}
+
+.db-tree-head.system-db {
+  color: var(--ink-muted);
+  font-weight: 500;
+}
+
+.db-tree-children {
+  margin: 2px 0 6px 10px;
+  padding-left: 8px;
+  border-left: 1px solid var(--border-subtle);
+}
+
+.conn-advanced {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+  padding: 8px 10px;
+}
+
+.conn-advanced summary {
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ink-secondary);
+  user-select: none;
+}
+
+.conn-advanced[open] summary {
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.conn-advanced-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 /* Workspace Area */
 .workspace {
   display: flex;
