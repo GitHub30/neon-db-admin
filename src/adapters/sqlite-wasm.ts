@@ -12,6 +12,7 @@ import type {
 import type { DatabaseAdapter } from './base.js';
 import { quoteIdent } from '../core/dialect.js';
 import { EMPTY_SQLITE_INIT_SQL } from '../core/sample-dbs.js';
+import { trackProgress } from '../ui/progress.js';
 
 interface PendingCall {
   resolve: (value: unknown) => void;
@@ -64,34 +65,40 @@ export class SqliteWasmAdapter implements DatabaseAdapter {
   }
 
   private callWorker<T>(payload: Record<string, unknown>, transfer?: Transferable[]): Promise<T> {
-    const worker = this.ensureWorker();
-    const id = this.nextId++;
-    return new Promise<T>((resolve, reject) => {
-      this.pending.set(id, { resolve: resolve as (v: unknown) => void, reject });
-      if (transfer?.length) {
-        worker.postMessage({ id, ...payload }, transfer);
-      } else {
-        worker.postMessage({ id, ...payload });
-      }
-    });
+    const run = () => {
+      const worker = this.ensureWorker();
+      const id = this.nextId++;
+      return new Promise<T>((resolve, reject) => {
+        this.pending.set(id, { resolve: resolve as (v: unknown) => void, reject });
+        if (transfer?.length) {
+          worker.postMessage({ id, ...payload }, transfer);
+        } else {
+          worker.postMessage({ id, ...payload });
+        }
+      });
+    };
+    if (payload.type === 'close') return run();
+    return trackProgress(run);
   }
 
   async connect(): Promise<void> {
-    const baseHref = document.baseURI.endsWith('/') ? document.baseURI : `${document.baseURI.replace(/\/[^/]*$/, '/')}`;
-    const wasmUrl = new URL('wasm/sql-wasm.wasm', baseHref).href;
+    return trackProgress(async () => {
+      const baseHref = document.baseURI.endsWith('/') ? document.baseURI : `${document.baseURI.replace(/\/[^/]*$/, '/')}`;
+      const wasmUrl = new URL('wasm/sql-wasm.wasm', baseHref).href;
 
-    if (this.initialBytes) {
-      const copy = new Uint8Array(this.initialBytes);
-      await this.callWorker({ type: 'init', wasmUrl, bytes: copy }, [copy.buffer]);
-      return;
-    }
+      if (this.initialBytes) {
+        const copy = new Uint8Array(this.initialBytes);
+        await this.callWorker({ type: 'init', wasmUrl, bytes: copy }, [copy.buffer]);
+        return;
+      }
 
-    if (this.config.sampleId !== 'empty') {
-      throw new Error('ローカルSQLiteファイルのデータは再読み込み後に保持されません。ファイルを再度アップロードしてください。');
-    }
+      if (this.config.sampleId !== 'empty') {
+        throw new Error('ローカルSQLiteファイルのデータは再読み込み後に保持されません。ファイルを再度アップロードしてください。');
+      }
 
-    await this.callWorker({ type: 'init', wasmUrl });
-    await this.callWorker({ type: 'execScript', sql: EMPTY_SQLITE_INIT_SQL });
+      await this.callWorker({ type: 'init', wasmUrl });
+      await this.callWorker({ type: 'execScript', sql: EMPTY_SQLITE_INIT_SQL });
+    });
   }
 
   async disconnect(): Promise<void> {

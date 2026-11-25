@@ -7,6 +7,7 @@ import { t } from '../i18n/translations.js';
 import type { QueryResult } from '../types/db.js';
 import { confirmSqlModal, copyToClipboard, el, labeledField, openModal, toast } from './dom.js';
 import { icon } from './icons.js';
+import { trackProgress } from './progress.js';
 
 interface SqlTab {
   id: string;
@@ -105,53 +106,55 @@ async function executeStatements(tab: SqlTab, rawSql: string, container: HTMLEle
   if (store.activeView === 'sql') renderSqlEditorView(container);
 
   const started = performance.now();
-  try {
-    let results: QueryResult[];
-    // Execute multi-statement scripts as a single batch so transactions (BEGIN/COMMIT) stay on one connection (M3)
-    if (finalStmts.length > 1 && finalStmts.length <= 50) {
-      results = await adapter.executeBatch(finalStmts.map((sql) => ({ sql })));
-    } else {
-      results = [];
-      for (const stmt of finalStmts) {
-        results.push(await adapter.query(stmt));
+  await trackProgress(async () => {
+    try {
+      let results: QueryResult[];
+      // Execute multi-statement scripts as a single batch so transactions (BEGIN/COMMIT) stay on one connection (M3)
+      if (finalStmts.length > 1 && finalStmts.length <= 50) {
+        results = await adapter.executeBatch(finalStmts.map((sql) => ({ sql })));
+      } else {
+        results = [];
+        for (const stmt of finalStmts) {
+          results.push(await adapter.query(stmt));
+        }
       }
-    }
 
-    const schemaDirty = finalStmts.some((stmt) => /^\s*(CREATE|ALTER|DROP|RENAME)\b/i.test(stmt));
-    tab.results = results;
-    tab.activeResultIdx = Math.max(0, results.length - 1);
-    const totalMs = Math.round((performance.now() - started) * 100) / 100;
-    const last = results[results.length - 1];
-    store.addHistory({
-      sql: rawSql.trim(),
-      dialect: conn.dialect,
-      connectionName: conn.name,
-      durationMs: totalMs,
-      rowCount: last?.rowCount ?? 0,
-      status: 'ok',
-    });
+      const schemaDirty = finalStmts.some((stmt) => /^\s*(CREATE|ALTER|DROP|RENAME)\b/i.test(stmt));
+      tab.results = results;
+      tab.activeResultIdx = Math.max(0, results.length - 1);
+      const totalMs = Math.round((performance.now() - started) * 100) / 100;
+      const last = results[results.length - 1];
+      store.addHistory({
+        sql: rawSql.trim(),
+        dialect: conn.dialect,
+        connectionName: conn.name,
+        durationMs: totalMs,
+        rowCount: last?.rowCount ?? 0,
+        status: 'ok',
+      });
 
-    if (schemaDirty) {
-      await store.refreshSchema();
+      if (schemaDirty) {
+        await store.refreshSchema();
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      tab.error = msg;
+      tab.results = [];
+      store.addHistory({
+        sql: rawSql.trim(),
+        dialect: conn.dialect,
+        connectionName: conn.name,
+        durationMs: Math.round((performance.now() - started) * 100) / 100,
+        rowCount: 0,
+        status: 'error',
+        error: msg,
+      });
+    } finally {
+      tab.running = false;
+      // Guard against overwriting another view if user switched tabs mid-query (H6)
+      if (store.activeView === 'sql') renderSqlEditorView(container);
     }
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    tab.error = msg;
-    tab.results = [];
-    store.addHistory({
-      sql: rawSql.trim(),
-      dialect: conn.dialect,
-      connectionName: conn.name,
-      durationMs: Math.round((performance.now() - started) * 100) / 100,
-      rowCount: 0,
-      status: 'error',
-      error: msg,
-    });
-  } finally {
-    tab.running = false;
-    // Guard against overwriting another view if user switched tabs mid-query (H6)
-    if (store.activeView === 'sql') renderSqlEditorView(container);
-  }
+  });
 }
 
 export function renderSqlEditorView(container: HTMLElement): void {

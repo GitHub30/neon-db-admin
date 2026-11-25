@@ -4,6 +4,7 @@ import { t } from '../i18n/translations.js';
 import type { ConnectionConfig, DatabaseSchema, DbDialect } from '../types/db.js';
 import { confirmSqlModal, el, toast } from './dom.js';
 import { icon } from './icons.js';
+import { runWithButtonBusy } from './progress.js';
 
 const MYSQL_SYSTEM_DBS = new Set(['information_schema', 'mysql', 'performance_schema', 'sys']);
 const isSystemDatabase = (dbName: string, dialect: DbDialect) =>
@@ -142,13 +143,16 @@ export function renderSidebar(container: HTMLElement, cb: SidebarCallbacks): voi
           className: 'btn btn-sm btn-icon',
           title: t('refresh'),
           'aria-label': t('refresh'),
-          onClick: async () => {
-            try {
-              await store.refreshSchema();
-              toast(t('schemaRefreshed'), 'success', 1800);
-            } catch (err) {
-              toast(err instanceof Error ? err.message : String(err), 'error');
-            }
+          onClick: async (e: Event) => {
+            const btn = e.currentTarget as HTMLButtonElement;
+            await runWithButtonBusy(btn, async () => {
+              try {
+                await store.refreshSchema();
+                toast(t('schemaRefreshed'), 'success', 1800);
+              } catch (err) {
+                toast(err instanceof Error ? err.message : String(err), 'error');
+              }
+            });
           },
         },
         icon('refresh', 14)

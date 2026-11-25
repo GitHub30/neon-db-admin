@@ -7,6 +7,7 @@ import type { ConnectionConfig, DbDialect } from '../types/db.js';
 import { el, labeledField, openModal, toast } from './dom.js';
 import { icon } from './icons.js';
 import { handleSqliteFileUpload } from './import-export.js';
+import { runWithButtonBusy } from './progress.js';
 import { renderProxyGuidePanel } from './proxy-guide-modal.js';
 
 const SPECIALIZED_DIALECTS = new Set<DbDialect>(['d1', 'd1-binding', 'libsql', 'sqlite']);
@@ -137,19 +138,21 @@ export function openConnectionModal(editing?: ConnectionConfig, initialTab: 'con
               {
                 type: 'button',
                 className: 'btn btn-sm',
-                onClick: async () => {
-                  const c: ConnectionConfig = {
-                    id: `empty-${Date.now()}`,
-                    name: 'New SQLite DB',
-                    dialect: 'sqlite',
-                    transport: 'wasm',
-                    sampleId: 'empty',
-                    createdAt: Date.now(),
-                  };
-                  store.upsertConnection(c);
-                  await store.connectTo(c);
-                  close();
-                  toast(t('newSqliteCreated'), 'success');
+                onClick: async (e: Event) => {
+                  await runWithButtonBusy(e.currentTarget as HTMLButtonElement, async () => {
+                    const c: ConnectionConfig = {
+                      id: `empty-${Date.now()}`,
+                      name: 'New SQLite DB',
+                      dialect: 'sqlite',
+                      transport: 'wasm',
+                      sampleId: 'empty',
+                      createdAt: Date.now(),
+                    };
+                    store.upsertConnection(c);
+                    await store.connectTo(c);
+                    close();
+                    toast(t('newSqliteCreated'), 'success');
+                  });
                 },
               },
               icon('plus', 13),
@@ -584,27 +587,29 @@ export function openConnectionModal(editing?: ConnectionConfig, initialTab: 'con
                 {
                   type: 'button',
                   className: 'btn',
-                  onClick: async () => {
-                    testStatus.textContent = t('testingConnStatus');
-                    testStatus.style.color = 'var(--ink-muted)';
-                    const probeDraft: ConnectionConfig = {
-                      ...draft,
-                      proxyUrl: draft.proxyUrl || DEFAULT_WORKER_PROXY_URL,
-                    };
-                    const adapter = new ProxyDatabaseAdapter(probeDraft);
-                    const res = await adapter.testConnection();
-                    if (res.ok) {
-                      if (res.dialect) {
-                        draft.dialect = res.dialect;
-                        draft.autoDetectDialect = false;
+                  onClick: async (e: Event) => {
+                    await runWithButtonBusy(e.currentTarget as HTMLButtonElement, async () => {
+                      testStatus.textContent = t('testingConnStatus');
+                      testStatus.style.color = 'var(--ink-muted)';
+                      const probeDraft: ConnectionConfig = {
+                        ...draft,
+                        proxyUrl: draft.proxyUrl || DEFAULT_WORKER_PROXY_URL,
+                      };
+                      const adapter = new ProxyDatabaseAdapter(probeDraft);
+                      const res = await adapter.testConnection();
+                      if (res.ok) {
+                        if (res.dialect) {
+                          draft.dialect = res.dialect;
+                          draft.autoDetectDialect = false;
+                        }
+                        const dialectTag = res.dialect ? ` [${res.dialect.toUpperCase()}]` : '';
+                        testStatus.textContent = `${t('connTestSuccess')}${dialectTag}: ${res.version} (${res.durationMs}ms)`;
+                        testStatus.style.color = 'var(--success)';
+                      } else {
+                        testStatus.textContent = `${t('connTestError')}: ${res.error}`;
+                        testStatus.style.color = 'var(--danger)';
                       }
-                      const dialectTag = res.dialect ? ` [${res.dialect.toUpperCase()}]` : '';
-                      testStatus.textContent = `${t('connTestSuccess')}${dialectTag}: ${res.version} (${res.durationMs}ms)`;
-                      testStatus.style.color = 'var(--success)';
-                    } else {
-                      testStatus.textContent = `${t('connTestError')}: ${res.error}`;
-                      testStatus.style.color = 'var(--danger)';
-                    }
+                    });
                   },
                 },
                 t('testConnectionBtn')
@@ -614,20 +619,22 @@ export function openConnectionModal(editing?: ConnectionConfig, initialTab: 'con
                 {
                   type: 'button',
                   className: 'btn btn-primary',
-                  onClick: async () => {
-                    const finalConn: ConnectionConfig = {
-                      ...draft,
-                      proxyUrl: draft.proxyUrl || DEFAULT_WORKER_PROXY_URL,
-                      name: deriveDefaultConnectionName(draft),
-                    };
-                    store.upsertConnection(finalConn);
-                    try {
-                      await store.connectTo(finalConn);
-                      close();
-                      toast(`${finalConn.name} ${t('connectedSuffix')}`, 'success');
-                    } catch (err) {
-                      toast(err instanceof Error ? err.message : String(err), 'error', 5000);
-                    }
+                  onClick: async (e: Event) => {
+                    await runWithButtonBusy(e.currentTarget as HTMLButtonElement, async () => {
+                      const finalConn: ConnectionConfig = {
+                        ...draft,
+                        proxyUrl: draft.proxyUrl || DEFAULT_WORKER_PROXY_URL,
+                        name: deriveDefaultConnectionName(draft),
+                      };
+                      store.upsertConnection(finalConn);
+                      try {
+                        await store.connectTo(finalConn);
+                        close();
+                        toast(`${finalConn.name} ${t('connectedSuffix')}`, 'success');
+                      } catch (err) {
+                        toast(err instanceof Error ? err.message : String(err), 'error', 5000);
+                      }
+                    });
                   },
                 },
                 t('saveAndConnectBtn')

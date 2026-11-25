@@ -21,6 +21,7 @@ import {
   sortDatabasesUserFirst,
 } from '../core/dialect-detect.js';
 import { DEFAULT_WORKER_PROXY_URL } from '../i18n/translations.js';
+import { trackProgress } from '../ui/progress.js';
 
 interface ProxyResponse {
   ok: boolean;
@@ -104,48 +105,50 @@ export class ProxyDatabaseAdapter implements DatabaseAdapter {
   }
 
   private async request(body: Record<string, unknown>, dialectOverride?: DbDialect): Promise<ProxyResponse> {
-    const endpoint = this.getEndpoint();
-    const useDialect = dialectOverride ?? this.dialect;
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'X-DB-Dialect': useDialect,
-    };
-    if (this.config.proxyToken) {
-      headers['X-Proxy-Token'] = this.config.proxyToken;
-    }
-
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), CLIENT_TIMEOUT_MS);
-    let resp: Response;
-    let text: string;
-    try {
-      resp = await fetch(endpoint, {
-        method: 'POST',
-        mode: 'cors',
-        signal: controller.signal,
-        headers,
-        body: JSON.stringify(body),
-      });
-      text = await resp.text();
-    } catch (err) {
-      if (err instanceof Error && err.name === 'AbortError') {
-        throw new Error(`プロキシ要求がタイムアウトしました (${CLIENT_TIMEOUT_MS / 1000}秒)`);
+    return trackProgress(async () => {
+      const endpoint = this.getEndpoint();
+      const useDialect = dialectOverride ?? this.dialect;
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'X-DB-Dialect': useDialect,
+      };
+      if (this.config.proxyToken) {
+        headers['X-Proxy-Token'] = this.config.proxyToken;
       }
-      throw err;
-    } finally {
-      clearTimeout(timer);
-    }
 
-    let parsed: ProxyResponse;
-    try {
-      parsed = JSON.parse(text) as ProxyResponse;
-    } catch {
-      throw new Error(`Proxy returned HTTP ${resp.status}: ${text.slice(0, 200)}`);
-    }
-    if (!resp.ok || !parsed.ok) {
-      throw new Error(parsed.error || `Proxy request failed (HTTP ${resp.status})`);
-    }
-    return parsed;
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), CLIENT_TIMEOUT_MS);
+      let resp: Response;
+      let text: string;
+      try {
+        resp = await fetch(endpoint, {
+          method: 'POST',
+          mode: 'cors',
+          signal: controller.signal,
+          headers,
+          body: JSON.stringify(body),
+        });
+        text = await resp.text();
+      } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') {
+          throw new Error(`プロキシ要求がタイムアウトしました (${CLIENT_TIMEOUT_MS / 1000}秒)`);
+        }
+        throw err;
+      } finally {
+        clearTimeout(timer);
+      }
+
+      let parsed: ProxyResponse;
+      try {
+        parsed = JSON.parse(text) as ProxyResponse;
+      } catch {
+        throw new Error(`Proxy returned HTTP ${resp.status}: ${text.slice(0, 200)}`);
+      }
+      if (!resp.ok || !parsed.ok) {
+        throw new Error(parsed.error || `Proxy request failed (HTTP ${resp.status})`);
+      }
+      return parsed;
+    });
   }
 
   async connect(): Promise<void> {
@@ -160,51 +163,53 @@ export class ProxyDatabaseAdapter implements DatabaseAdapter {
   }
 
   async testConnection(): Promise<{ ok: boolean; version: string; durationMs: number; dialect?: DbDialect; error?: string }> {
-    const candidates = this.config.autoDetectDialect
-      ? inferDialectCandidates(this.config)
-      : [{ dialect: this.dialect, port: this.resolvedPort ?? this.config.port }];
+    return trackProgress(async () => {
+      const candidates = this.config.autoDetectDialect
+        ? inferDialectCandidates(this.config)
+        : [{ dialect: this.dialect, port: this.resolvedPort ?? this.config.port }];
 
-    let lastError = '';
-    for (const cand of candidates) {
-      try {
-        const res = await this.request(
-          {
-            action: 'test',
-            dialect: cand.dialect,
-            connection: this.buildConnectionPayload({ port: cand.port }),
-          },
-          cand.dialect
-        );
-        const version = String(res.rows?.[0]?.[0] ?? cand.dialect);
-        const refined = refineDetectedDialect(cand.dialect, version);
-        this.dialect = refined;
-        this.config.dialect = refined;
-        if (cand.port && !this.config.port) {
-          this.resolvedPort = cand.port;
-        }
-        return {
-          ok: true,
-          version,
-          durationMs: res.durationMs ?? 0,
-          dialect: refined,
-        };
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        lastError = msg;
-        if (isDefinitiveDialectError(cand.dialect, msg)) {
-          this.dialect = cand.dialect;
-          this.config.dialect = cand.dialect;
-          return { ok: false, version: '', durationMs: 0, dialect: cand.dialect, error: msg };
+      let lastError = '';
+      for (const cand of candidates) {
+        try {
+          const res = await this.request(
+            {
+              action: 'test',
+              dialect: cand.dialect,
+              connection: this.buildConnectionPayload({ port: cand.port }),
+            },
+            cand.dialect
+          );
+          const version = String(res.rows?.[0]?.[0] ?? cand.dialect);
+          const refined = refineDetectedDialect(cand.dialect, version);
+          this.dialect = refined;
+          this.config.dialect = refined;
+          if (cand.port && !this.config.port) {
+            this.resolvedPort = cand.port;
+          }
+          return {
+            ok: true,
+            version,
+            durationMs: res.durationMs ?? 0,
+            dialect: refined,
+          };
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          lastError = msg;
+          if (isDefinitiveDialectError(cand.dialect, msg)) {
+            this.dialect = cand.dialect;
+            this.config.dialect = cand.dialect;
+            return { ok: false, version: '', durationMs: 0, dialect: cand.dialect, error: msg };
+          }
         }
       }
-    }
 
-    return {
-      ok: false,
-      version: '',
-      durationMs: 0,
-      error: lastError || 'Unable to connect via proxy.',
-    };
+      return {
+        ok: false,
+        version: '',
+        durationMs: 0,
+        error: lastError || 'Unable to connect via proxy.',
+      };
+    });
   }
 
   async query(sql: string, params?: unknown[], maxRows = 2000): Promise<QueryResult> {
@@ -280,12 +285,14 @@ export class ProxyDatabaseAdapter implements DatabaseAdapter {
   }
 
   async introspectSchema(targetDatabase?: string): Promise<DatabaseSchema> {
-    if (targetDatabase !== undefined) {
-      this.setActiveDatabase(targetDatabase);
-    }
-    if (isMysqlLike(this.dialect)) return this.introspectMysql();
-    if (isPostgres(this.dialect)) return this.introspectPostgres();
-    return this.introspectSqliteLike();
+    return trackProgress(async () => {
+      if (targetDatabase !== undefined) {
+        this.setActiveDatabase(targetDatabase);
+      }
+      if (isMysqlLike(this.dialect)) return this.introspectMysql();
+      if (isPostgres(this.dialect)) return this.introspectPostgres();
+      return this.introspectSqliteLike();
+    });
   }
 
   private async introspectMysql(): Promise<DatabaseSchema> {

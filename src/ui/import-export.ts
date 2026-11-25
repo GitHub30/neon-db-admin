@@ -16,27 +16,30 @@ import { splitSqlStatements } from '../core/sql-formatter.js';
 import { t } from '../i18n/translations.js';
 import { el, labeledField, toast } from './dom.js';
 import { icon } from './icons.js';
+import { runWithButtonBusy, trackProgress } from './progress.js';
 
 export async function handleSqliteFileUpload(file: File): Promise<void> {
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  // Enforce exact SQLite 3 magic header for all non-empty files (fixes 1..15 byte bypass — H9)
-  if (bytes.length > 0) {
-    const header = bytes.length >= 16 ? new TextDecoder().decode(bytes.subarray(0, 16)) : '';
-    if (header !== 'SQLite format 3\0') {
-      toast('有効な SQLite 3 データベースファイルではありません。(.sqlite / .db)', 'error', 4500);
-      return;
+  return trackProgress(async () => {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    // Enforce exact SQLite 3 magic header for all non-empty files (fixes 1..15 byte bypass — H9)
+    if (bytes.length > 0) {
+      const header = bytes.length >= 16 ? new TextDecoder().decode(bytes.subarray(0, 16)) : '';
+      if (header !== 'SQLite format 3\0') {
+        toast('有効な SQLite 3 データベースファイルではありません。(.sqlite / .db)', 'error', 4500);
+        return;
+      }
     }
-  }
-  const conn = {
-    id: `sqlite-file-${Date.now()}`,
-    name: file.name,
-    dialect: 'sqlite' as const,
-    transport: 'wasm' as const,
-    filePath: file.name,
-    createdAt: Date.now(),
-  };
-  await store.connectTo(conn, bytes);
-  toast(`SQLite ファイル "${file.name}" (${(bytes.length / 1024).toFixed(1)} KB) を開きました`, 'success');
+    const conn = {
+      id: `sqlite-file-${Date.now()}`,
+      name: file.name,
+      dialect: 'sqlite' as const,
+      transport: 'wasm' as const,
+      filePath: file.name,
+      createdAt: Date.now(),
+    };
+    await store.connectTo(conn, bytes);
+    toast(`SQLite ファイル "${file.name}" (${(bytes.length / 1024).toFixed(1)} KB) を開きました`, 'success');
+  });
 }
 
 export function renderImportExportView(container: HTMLElement): void {
@@ -75,15 +78,17 @@ export function renderImportExportView(container: HTMLElement): void {
             {
               type: 'button',
               className: 'btn btn-primary',
-              onClick: async () => {
-                try {
-                  const bytes = await adapter.exportSqliteBinary!();
-                  const fname = schema?.databaseName?.endsWith('.sqlite') ? schema.databaseName : `${schema?.databaseName || 'database'}.sqlite`;
-                  downloadBlob(new Uint8Array(bytes), fname, 'application/vnd.sqlite3');
-                  toast(`${fname} を保存しました`, 'success');
-                } catch (err) {
-                  toast(err instanceof Error ? err.message : String(err), 'error');
-                }
+              onClick: async (e: Event) => {
+                await runWithButtonBusy(e.currentTarget as HTMLButtonElement, async () => {
+                  try {
+                    const bytes = await adapter.exportSqliteBinary!();
+                    const fname = schema?.databaseName?.endsWith('.sqlite') ? schema.databaseName : `${schema?.databaseName || 'database'}.sqlite`;
+                    downloadBlob(new Uint8Array(bytes), fname, 'application/vnd.sqlite3');
+                    toast(`${fname} を保存しました`, 'success');
+                  } catch (err) {
+                    toast(err instanceof Error ? err.message : String(err), 'error');
+                  }
+                });
               },
             },
             icon('download', 14),
@@ -140,44 +145,46 @@ export function renderImportExportView(container: HTMLElement): void {
       {
         type: 'button',
         className: 'btn btn-primary',
-        onClick: async () => {
-          const chunks: string[] = [
-            `-- Neon DB Admin SQL Dump`,
-            `-- Database: ${schema.databaseName} (${schema.dialect})`,
-            `-- Exported: ${new Date().toISOString()}`,
-          ];
-          if (isSqliteLike(schema.dialect)) chunks.push('PRAGMA foreign_keys = OFF;');
-          else if (isMysqlLike(schema.dialect)) chunks.push('SET FOREIGN_KEY_CHECKS = 0;');
-          chunks.push('');
+        onClick: async (e: Event) => {
+          await runWithButtonBusy(e.currentTarget as HTMLButtonElement, async () => {
+            const chunks: string[] = [
+              `-- Neon DB Admin SQL Dump`,
+              `-- Database: ${schema.databaseName} (${schema.dialect})`,
+              `-- Exported: ${new Date().toISOString()}`,
+            ];
+            if (isSqliteLike(schema.dialect)) chunks.push('PRAGMA foreign_keys = OFF;');
+            else if (isMysqlLike(schema.dialect)) chunks.push('SET FOREIGN_KEY_CHECKS = 0;');
+            chunks.push('');
 
-          const truncatedTables: string[] = [];
-          try {
-            for (const tbl of schema.tables) {
-              if (!selectedDumpTables.has(tbl.name)) continue;
-              if (includeDdlChk.checked) {
-                chunks.push(tbl.ddl ? `${tbl.ddl.replace(/;+$/, '')};` : generateCreateTableDdl(tbl, schema.dialect));
-              }
-              if (includeDataChk.checked) {
-                const res = await adapter.query(`SELECT * FROM ${quoteIdent(tbl.name, schema.dialect)}`, [], 5000);
-                if (res.truncated) truncatedTables.push(tbl.name);
-                if (res.rows.length > 0) {
-                  chunks.push(toSqlInserts(tbl.name, res.columns.map((c) => c.name), res.rows, schema.dialect));
+            const truncatedTables: string[] = [];
+            try {
+              for (const tbl of schema.tables) {
+                if (!selectedDumpTables.has(tbl.name)) continue;
+                if (includeDdlChk.checked) {
+                  chunks.push(tbl.ddl ? `${tbl.ddl.replace(/;+$/, '')};` : generateCreateTableDdl(tbl, schema.dialect));
                 }
+                if (includeDataChk.checked) {
+                  const res = await adapter.query(`SELECT * FROM ${quoteIdent(tbl.name, schema.dialect)}`, [], 5000);
+                  if (res.truncated) truncatedTables.push(tbl.name);
+                  if (res.rows.length > 0) {
+                    chunks.push(toSqlInserts(tbl.name, res.columns.map((c) => c.name), res.rows, schema.dialect));
+                  }
+                }
+                chunks.push('');
               }
-              chunks.push('');
-            }
-            if (isSqliteLike(schema.dialect)) chunks.push('PRAGMA foreign_keys = ON;');
-            else if (isMysqlLike(schema.dialect)) chunks.push('SET FOREIGN_KEY_CHECKS = 1;');
+              if (isSqliteLike(schema.dialect)) chunks.push('PRAGMA foreign_keys = ON;');
+              else if (isMysqlLike(schema.dialect)) chunks.push('SET FOREIGN_KEY_CHECKS = 1;');
 
-            downloadBlob(chunks.join('\n'), `${schema.databaseName.replace(/\.[^.]+$/, '')}_dump.sql`, 'application/sql;charset=utf-8');
-            if (truncatedTables.length > 0) {
-              toast(`警告: 5,000行上限により一部省略されました (${truncatedTables.join(', ')})`, 'info', 5500);
-            } else {
-              toast('SQLダンプをダウンロードしました', 'success');
+              downloadBlob(chunks.join('\n'), `${schema.databaseName.replace(/\.[^.]+$/, '')}_dump.sql`, 'application/sql;charset=utf-8');
+              if (truncatedTables.length > 0) {
+                toast(`警告: 5,000行上限により一部省略されました (${truncatedTables.join(', ')})`, 'info', 5500);
+              } else {
+                toast('SQLダンプをダウンロードしました', 'success');
+              }
+            } catch (err) {
+              toast(err instanceof Error ? err.message : String(err), 'error', 5000);
             }
-          } catch (err) {
-            toast(err instanceof Error ? err.message : String(err), 'error', 5000);
-          }
+          });
         },
       },
       icon('download', 14),
@@ -202,31 +209,34 @@ export function renderImportExportView(container: HTMLElement): void {
         {
           type: 'button',
           className: 'btn btn-primary',
-          onClick: async () => {
+          onClick: async (e: Event) => {
+            const btn = e.currentTarget as HTMLButtonElement;
             const file = sqlFileInput.files?.[0];
             if (!file) {
               toast('.sql ファイルを選択してください', 'info');
               return;
             }
-            const text = await file.text();
-            const stmts = splitSqlStatements(text, isMysqlLike(schema.dialect));
-            if (stmts.length === 0) {
-              toast('実行可能なSQL文がありませんでした', 'info');
-              return;
-            }
-            sqlStatus.textContent = `${stmts.length} 文を実行中...`;
-            try {
-              for (let i = 0; i < stmts.length; i += 40) {
-                await adapter.executeBatch(stmts.slice(i, i + 40).map((sql) => ({ sql })));
+            await runWithButtonBusy(btn, async () => {
+              const text = await file.text();
+              const stmts = splitSqlStatements(text, isMysqlLike(schema.dialect));
+              if (stmts.length === 0) {
+                toast('実行可能なSQL文がありませんでした', 'info');
+                return;
               }
-              await store.refreshSchema();
-              sqlStatus.textContent = `完了: ${stmts.length} 文のSQLを実行しました。`;
-              toast(`${stmts.length} 件のSQL文をインポートしました`, 'success');
-            } catch (err) {
-              const msg = err instanceof Error ? err.message : String(err);
-              sqlStatus.textContent = `エラー: ${msg}`;
-              toast(msg, 'error', 5000);
-            }
+              sqlStatus.textContent = `${stmts.length} 文を実行中...`;
+              try {
+                for (let i = 0; i < stmts.length; i += 40) {
+                  await adapter.executeBatch(stmts.slice(i, i + 40).map((sql) => ({ sql })));
+                }
+                await store.refreshSchema();
+                sqlStatus.textContent = `完了: ${stmts.length} 文のSQLを実行しました。`;
+                toast(`${stmts.length} 件のSQL文をインポートしました`, 'success');
+              } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                sqlStatus.textContent = `エラー: ${msg}`;
+                toast(msg, 'error', 5000);
+              }
+            });
           },
         },
         icon('upload', 14),
@@ -318,7 +328,8 @@ export function renderImportExportView(container: HTMLElement): void {
         {
           type: 'button',
           className: 'btn btn-primary',
-          onClick: async () => {
+          onClick: async (e: Event) => {
+            const btn = e.currentTarget as HTMLButtonElement;
             if (!parsedData || parsedData.headers.length === 0) {
               toast('先にCSVまたはJSONファイルを選択してください', 'info');
               return;
@@ -328,40 +339,42 @@ export function renderImportExportView(container: HTMLElement): void {
               toast('テーブル名を入力してください', 'error');
               return;
             }
-            try {
-              const exists = schema.tables.some((x) => x.name.toLowerCase() === tName.toLowerCase());
-              if (!exists && autoCreateChk.checked) {
-                const inferred = inferColumnTypes(parsedData.headers, parsedData.rows);
-                const ddl = generateCreateTableDdl(
-                  {
-                    name: tName,
-                    columns: inferred.map((c) => ({
-                      name: c.name,
-                      type: c.type,
-                      nullable: true,
-                      defaultValue: null,
-                      isPrimaryKey: false,
-                      isAutoIncrement: false,
-                    })),
-                    foreignKeys: [],
-                  },
-                  schema.dialect
-                );
-                await adapter.query(ddl);
-              }
+            await runWithButtonBusy(btn, async () => {
+              try {
+                const exists = schema.tables.some((x) => x.name.toLowerCase() === tName.toLowerCase());
+                if (!exists && autoCreateChk.checked) {
+                  const inferred = inferColumnTypes(parsedData!.headers, parsedData!.rows);
+                  const ddl = generateCreateTableDdl(
+                    {
+                      name: tName,
+                      columns: inferred.map((c) => ({
+                        name: c.name,
+                        type: c.type,
+                        nullable: true,
+                        defaultValue: null,
+                        isPrimaryKey: false,
+                        isAutoIncrement: false,
+                      })),
+                      foreignKeys: [],
+                    },
+                    schema.dialect
+                  );
+                  await adapter.query(ddl);
+                }
 
-              const rowsToImport = parsedData.rows.slice(0, MAX_IMPORT_ROWS);
-              const batch = rowsToImport.map((row) => generateInsertSql(tName, parsedData!.headers, row, schema.dialect, true));
-              for (let i = 0; i < batch.length; i += 40) {
-                await adapter.executeBatch(batch.slice(i, i + 40));
+                const rowsToImport = parsedData!.rows.slice(0, MAX_IMPORT_ROWS);
+                const batch = rowsToImport.map((row) => generateInsertSql(tName, parsedData!.headers, row, schema.dialect, true));
+                for (let i = 0; i < batch.length; i += 40) {
+                  await adapter.executeBatch(batch.slice(i, i + 40));
+                }
+                await store.refreshSchema();
+                store.selectTable(tName, 'data');
+                const suffix = parsedData!.rows.length > MAX_IMPORT_ROWS ? ` (全${parsedData!.rows.length}行中 ${MAX_IMPORT_ROWS}行まで)` : '';
+                toast(`${batch.length} 行を "${tName}" にインポートしました${suffix}`, 'success');
+              } catch (err) {
+                toast(err instanceof Error ? err.message : String(err), 'error', 5000);
               }
-              await store.refreshSchema();
-              store.selectTable(tName, 'data');
-              const suffix = parsedData.rows.length > MAX_IMPORT_ROWS ? ` (全${parsedData.rows.length}行中 ${MAX_IMPORT_ROWS}行まで)` : '';
-              toast(`${batch.length} 行を "${tName}" にインポートしました${suffix}`, 'success');
-            } catch (err) {
-              toast(err instanceof Error ? err.message : String(err), 'error', 5000);
-            }
+            });
           },
         },
         icon('upload', 14),

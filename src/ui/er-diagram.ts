@@ -22,6 +22,7 @@ import type {
 } from '../types/db.js';
 import { confirmSqlModal, copyToClipboard, el, labeledField, openModal, toast } from './dom.js';
 import { icon } from './icons.js';
+import { runWithButtonBusy, trackProgress } from './progress.js';
 
 const NODE_COLORS = ['#0f766e', '#0284c7', '#b45309', '#15803d', '#be123c', '#0e7490', '#475569'];
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{3,8}$/;
@@ -443,34 +444,39 @@ function buildStandaloneSvg(model: ERModel): string {
   return parts.join('\n');
 }
 
-function exportPngFromSvg(svgMarkup: string, filename: string): void {
-  const blob = new Blob([svgMarkup], { type: 'image/svg+xml;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const img = new Image();
-  img.onload = () => {
-    const scale = 2;
-    const canvas = document.createElement('canvas');
-    canvas.width = img.width * scale;
-    canvas.height = img.height * scale;
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.scale(scale, scale);
-      ctx.fillStyle = '#f8fafc';
-      ctx.fillRect(0, 0, img.width, img.height);
-      ctx.drawImage(img, 0, 0);
-      canvas.toBlob((pngBlob) => {
-        if (pngBlob) downloadBlob(pngBlob, filename, 'image/png');
+function exportPngFromSvg(svgMarkup: string, filename: string): Promise<void> {
+  return new Promise((resolve) => {
+    const blob = new Blob([svgMarkup], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      const scale = 2;
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.scale(scale, scale);
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillRect(0, 0, img.width, img.height);
+        ctx.drawImage(img, 0, 0);
+        canvas.toBlob((pngBlob) => {
+          if (pngBlob) downloadBlob(pngBlob, filename, 'image/png');
+          URL.revokeObjectURL(url);
+          resolve();
+        }, 'image/png');
+      } else {
         URL.revokeObjectURL(url);
-      }, 'image/png');
-    } else {
+        resolve();
+      }
+    };
+    img.onerror = () => {
       URL.revokeObjectURL(url);
-    }
-  };
-  img.onerror = () => {
-    URL.revokeObjectURL(url);
-    toast('PNG出力に失敗しました', 'error');
-  };
-  img.src = url;
+      toast('PNG出力に失敗しました', 'error');
+      resolve();
+    };
+    img.src = url;
+  });
 }
 
 function openAddRelationModal(model: ERModel, container: HTMLElement): void {
@@ -730,7 +736,8 @@ export function renderErDiagramView(container: HTMLElement): void {
                     {
                       type: 'button',
                       className: 'btn btn-primary',
-                      onClick: async () => {
+                      onClick: async (e: Event) => {
+                        const btn = e.currentTarget as HTMLButtonElement;
                         if (!store.adapter) {
                           toast('DBに接続してください', 'error');
                           return;
@@ -742,17 +749,19 @@ export function renderErDiagramView(container: HTMLElement): void {
                           danger: false,
                         });
                         if (!ok) return;
-                        try {
-                          const stmts = splitSqlStatements(ddl);
-                          for (const s of stmts) {
-                            await store.adapter.query(s);
+                        await runWithButtonBusy(btn, async () => {
+                          try {
+                            const stmts = splitSqlStatements(ddl);
+                            for (const s of stmts) {
+                              await store.adapter!.query(s);
+                            }
+                            await store.refreshSchema();
+                            close();
+                            toast(`${stmts.length} 件のDDLを実行しました`, 'success');
+                          } catch (err) {
+                            toast(err instanceof Error ? err.message : String(err), 'error', 5000);
                           }
-                          await store.refreshSchema();
-                          close();
-                          toast(`${stmts.length} 件のDDLを実行しました`, 'success');
-                        } catch (err) {
-                          toast(err instanceof Error ? err.message : String(err), 'error', 5000);
-                        }
+                        });
                       },
                     },
                     icon('play', 13),
@@ -767,7 +776,7 @@ export function renderErDiagramView(container: HTMLElement): void {
         t('erForward')
       ),
       el('button', { type: 'button', className: 'btn btn-sm', onClick: () => downloadBlob(buildStandaloneSvg(model), `${model.name.replace(/\s+/g, '_')}.svg`, 'image/svg+xml') }, 'SVG'),
-      el('button', { type: 'button', className: 'btn btn-sm', onClick: () => exportPngFromSvg(buildStandaloneSvg(model), `${model.name.replace(/\s+/g, '_')}.png`) }, 'PNG'),
+      el('button', { type: 'button', className: 'btn btn-sm', onClick: () => void trackProgress(() => exportPngFromSvg(buildStandaloneSvg(model), `${model.name.replace(/\s+/g, '_')}.png`)) }, 'PNG'),
       el(
         'button',
         {

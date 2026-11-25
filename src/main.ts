@@ -8,6 +8,7 @@ import { t } from './i18n/translations.js';
 import type { ActiveView, ConnectionConfig } from './types/db.js';
 import { el, toast } from './ui/dom.js';
 import { icon, type IconName } from './ui/icons.js';
+import { runWithButtonBusy, trackProgress } from './ui/progress.js';
 import { renderTopbar } from './ui/topbar.js';
 
 interface BeforeInstallPromptEvent extends Event {
@@ -33,12 +34,14 @@ function getHiddenSqliteInput(): HTMLInputElement {
       const file = inp!.files?.[0];
       inp!.value = '';
       if (!file) return;
-      try {
-        const { handleSqliteFileUpload } = await import('./ui/import-export.js');
-        await handleSqliteFileUpload(file);
-      } catch (err) {
-        toast(err instanceof Error ? err.message : String(err), 'error', 5000);
-      }
+      await trackProgress(async () => {
+        try {
+          const { handleSqliteFileUpload } = await import('./ui/import-export.js');
+          await handleSqliteFileUpload(file);
+        } catch (err) {
+          toast(err instanceof Error ? err.message : String(err), 'error', 5000);
+        }
+      });
     });
     document.body.appendChild(inp);
   }
@@ -92,7 +95,7 @@ function renderEmptyWorkbench(container: HTMLElement): void {
             id: 'btn-open-conn-hero',
             className: 'btn btn-primary',
             onClick: async () => {
-              const { openConnectionModal } = await import('./ui/connection-modal.js');
+              const { openConnectionModal } = await trackProgress(() => import('./ui/connection-modal.js'), { delayMs: 80 });
               openConnectionModal();
             },
           },
@@ -116,13 +119,15 @@ function renderEmptyWorkbench(container: HTMLElement): void {
             type: 'button',
             id: 'btn-new-sqlite-hero',
             className: 'btn',
-            onClick: async () => {
-              try {
-                await createAndConnectEmptySqlite();
-                toast(t('newSqliteCreated'), 'success');
-              } catch (err) {
-                toast(err instanceof Error ? err.message : String(err), 'error', 5000);
-              }
+            onClick: async (e: Event) => {
+              await runWithButtonBusy(e.currentTarget as HTMLButtonElement, async () => {
+                try {
+                  await createAndConnectEmptySqlite();
+                  toast(t('newSqliteCreated'), 'success');
+                } catch (err) {
+                  toast(err instanceof Error ? err.message : String(err), 'error', 5000);
+                }
+              });
             },
           },
           icon('plus', 14),
@@ -145,12 +150,12 @@ function mountApp(): void {
   if (!topbarEl || !sidebarEl || !tabsEl || !contentEl || !statusEl) return;
 
   const openConnections = async (editing?: ConnectionConfig, initialTab: 'connect' | 'proxy' = 'connect') => {
-    const { openConnectionModal } = await import('./ui/connection-modal.js');
+    const { openConnectionModal } = await trackProgress(() => import('./ui/connection-modal.js'), { delayMs: 80 });
     openConnectionModal(editing, initialTab);
   };
 
   const openPalette = async () => {
-    const { openCommandPalette } = await import('./ui/command-palette.js');
+    const { openCommandPalette } = await trackProgress(() => import('./ui/command-palette.js'), { delayMs: 80 });
     openCommandPalette();
   };
 
@@ -160,7 +165,7 @@ function mountApp(): void {
       openConnections();
       return;
     }
-    const { openCreateTableModal } = await import('./ui/table-designer.js');
+    const { openCreateTableModal } = await trackProgress(() => import('./ui/table-designer.js'), { delayMs: 80 });
     openCreateTableModal();
   };
 
@@ -267,38 +272,43 @@ function mountApp(): void {
         return;
       }
 
-      switch (store.activeView) {
-        case 'data': {
-          const { renderDataGridView } = await import('./ui/data-grid.js');
-          if (token === viewRenderToken) renderDataGridView(contentEl);
-          break;
-        }
-        case 'sql': {
-          const { renderSqlEditorView } = await import('./ui/sql-editor.js');
-          if (token === viewRenderToken) renderSqlEditorView(contentEl);
-          break;
-        }
-        case 'structure': {
-          const { renderStructureView } = await import('./ui/table-designer.js');
-          if (token === viewRenderToken) renderStructureView(contentEl);
-          break;
-        }
-        case 'er': {
-          const { renderErDiagramView } = await import('./ui/er-diagram.js');
-          if (token === viewRenderToken) renderErDiagramView(contentEl);
-          break;
-        }
-        case 'import-export': {
-          const { renderImportExportView } = await import('./ui/import-export.js');
-          if (token === viewRenderToken) renderImportExportView(contentEl);
-          break;
-        }
-        case 'tools': {
-          const { renderDbToolsView } = await import('./ui/db-tools.js');
-          if (token === viewRenderToken) renderDbToolsView(contentEl);
-          break;
-        }
-      }
+      await trackProgress(
+        async () => {
+          switch (store.activeView) {
+            case 'data': {
+              const { renderDataGridView } = await import('./ui/data-grid.js');
+              if (token === viewRenderToken) renderDataGridView(contentEl);
+              break;
+            }
+            case 'sql': {
+              const { renderSqlEditorView } = await import('./ui/sql-editor.js');
+              if (token === viewRenderToken) renderSqlEditorView(contentEl);
+              break;
+            }
+            case 'structure': {
+              const { renderStructureView } = await import('./ui/table-designer.js');
+              if (token === viewRenderToken) renderStructureView(contentEl);
+              break;
+            }
+            case 'er': {
+              const { renderErDiagramView } = await import('./ui/er-diagram.js');
+              if (token === viewRenderToken) renderErDiagramView(contentEl);
+              break;
+            }
+            case 'import-export': {
+              const { renderImportExportView } = await import('./ui/import-export.js');
+              if (token === viewRenderToken) renderImportExportView(contentEl);
+              break;
+            }
+            case 'tools': {
+              const { renderDbToolsView } = await import('./ui/db-tools.js');
+              if (token === viewRenderToken) renderDbToolsView(contentEl);
+              break;
+            }
+          }
+        },
+        { delayMs: 80 }
+      );
     };
 
     if (isInitialBoot) {
@@ -310,7 +320,7 @@ function mountApp(): void {
         }
         const btnConn = document.getElementById('btn-open-conn-hero');
         const btnUpload = document.getElementById('btn-upload-sqlite-hero');
-        const btnNew = document.getElementById('btn-new-sqlite-hero');
+        const btnNew = document.getElementById('btn-new-sqlite-hero') as HTMLButtonElement | null;
         if (store.locale === 'ja' && btnConn && btnUpload && btnNew) {
           btnConn.addEventListener('click', () => {
             void openConnections();
@@ -319,12 +329,14 @@ function mountApp(): void {
             getHiddenSqliteInput().click();
           });
           btnNew.addEventListener('click', async () => {
-            try {
-              await createAndConnectEmptySqlite();
-              toast(t('newSqliteCreated'), 'success');
-            } catch (err) {
-              toast(err instanceof Error ? err.message : String(err), 'error', 5000);
-            }
+            await runWithButtonBusy(btnNew, async () => {
+              try {
+                await createAndConnectEmptySqlite();
+                toast(t('newSqliteCreated'), 'success');
+              } catch (err) {
+                toast(err instanceof Error ? err.message : String(err), 'error', 5000);
+              }
+            });
           });
         } else {
           renderEmptyWorkbench(contentEl);
@@ -395,19 +407,23 @@ function mountApp(): void {
     const file = e.dataTransfer?.files?.[0];
     if (!file) return;
     if (/\.(sqlite|sqlite3|db|db3)$/i.test(file.name)) {
-      try {
-        const { handleSqliteFileUpload } = await import('./ui/import-export.js');
-        await handleSqliteFileUpload(file);
-      } catch (err) {
-        toast(err instanceof Error ? err.message : String(err), 'error', 5000);
-      }
+      await trackProgress(async () => {
+        try {
+          const { handleSqliteFileUpload } = await import('./ui/import-export.js');
+          await handleSqliteFileUpload(file);
+        } catch (err) {
+          toast(err instanceof Error ? err.message : String(err), 'error', 5000);
+        }
+      });
     } else if (/\.sql$/i.test(file.name)) {
-      const text = await file.text();
-      if (!store.adapter) {
-        await createAndConnectEmptySqlite();
-      }
-      store.openSqlWithQuery(text);
-      toast(`SQLファイル "${file.name}" をエディタに読み込みました`, 'success');
+      await trackProgress(async () => {
+        const text = await file.text();
+        if (!store.adapter) {
+          await createAndConnectEmptySqlite();
+        }
+        store.openSqlWithQuery(text);
+        toast(`SQLファイル "${file.name}" をエディタに読み込みました`, 'success');
+      });
     }
   });
 

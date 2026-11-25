@@ -6,6 +6,7 @@ import { t } from '../i18n/translations.js';
 import type { TableSchema } from '../types/db.js';
 import { copyToClipboard, el, toast } from './dom.js';
 import { icon } from './icons.js';
+import { runWithButtonBusy } from './progress.js';
 
 export function renderDbToolsView(container: HTMLElement): void {
   const schema = store.schema;
@@ -101,23 +102,25 @@ export function renderDbToolsView(container: HTMLElement): void {
         {
           type: 'button',
           className: 'btn btn-sm btn-primary',
-          onClick: async () => {
+          onClick: async (e: Event) => {
             const target = schema.tables.find((x) => x.name === tblSel.value);
             if (!target) return;
-            const fkPools: Record<string, unknown[]> = {};
-            for (const fk of target.foreignKeys) {
-              try {
-                const res = await adapter.query(
-                  `SELECT ${quoteIdent(fk.refColumn, schema.dialect)} FROM ${quoteIdent(fk.refTable, schema.dialect)} LIMIT 50`
-                );
-                fkPools[fk.column] = res.rows.map((r) => r[0]).filter((v) => v !== null);
-              } catch {
-                // ignore
+            await runWithButtonBusy(e.currentTarget as HTMLButtonElement, async () => {
+              const fkPools: Record<string, unknown[]> = {};
+              for (const fk of target.foreignKeys) {
+                try {
+                  const res = await adapter.query(
+                    `SELECT ${quoteIdent(fk.refColumn, schema.dialect)} FROM ${quoteIdent(fk.refTable, schema.dialect)} LIMIT 50`
+                  );
+                  fkPools[fk.column] = res.rows.map((r) => r[0]).filter((v) => v !== null);
+                } catch {
+                  // ignore
+                }
               }
-            }
-            const stmts = generateMockInsertStatements(target, Number(countInp.value) || 10, schema.dialect, fkPools);
-            mockOut.style.display = 'block';
-            mockOut.textContent = stmts.join('\n');
+              const stmts = generateMockInsertStatements(target, Number(countInp.value) || 10, schema.dialect, fkPools);
+              mockOut.style.display = 'block';
+              mockOut.textContent = stmts.join('\n');
+            });
           },
         },
         icon('sparkles', 13),
@@ -128,22 +131,24 @@ export function renderDbToolsView(container: HTMLElement): void {
         {
           type: 'button',
           className: 'btn btn-sm',
-          onClick: async () => {
+          onClick: async (e: Event) => {
             const sql = mockOut.textContent?.trim();
             if (!sql) {
               toast('先に「SQLを生成」を押してください', 'info');
               return;
             }
-            const lines = sql.split('\n').filter(Boolean);
-            try {
-              for (let i = 0; i < lines.length; i += 40) {
-                await adapter.executeBatch(lines.slice(i, i + 40).map((s) => ({ sql: s })));
+            await runWithButtonBusy(e.currentTarget as HTMLButtonElement, async () => {
+              const lines = sql.split('\n').filter(Boolean);
+              try {
+                for (let i = 0; i < lines.length; i += 40) {
+                  await adapter.executeBatch(lines.slice(i, i + 40).map((s) => ({ sql: s })));
+                }
+                await store.refreshSchema();
+                toast(`${lines.length} 件のテストデータを挿入しました`, 'success');
+              } catch (err) {
+                toast(err instanceof Error ? err.message : String(err), 'error', 5000);
               }
-              await store.refreshSchema();
-              toast(`${lines.length} 件のテストデータを挿入しました`, 'success');
-            } catch (err) {
-              toast(err instanceof Error ? err.message : String(err), 'error', 5000);
-            }
+            });
           },
         },
         icon('play', 13),
@@ -230,13 +235,15 @@ export function renderDbToolsView(container: HTMLElement): void {
           {
             type: 'button',
             className: 'btn btn-sm',
-            onClick: async () => {
-              try {
-                await adapter.query('VACUUM');
-                toast('VACUUM が完了しました', 'success');
-              } catch (err) {
-                toast(err instanceof Error ? err.message : String(err), 'error');
-              }
+            onClick: async (e: Event) => {
+              await runWithButtonBusy(e.currentTarget as HTMLButtonElement, async () => {
+                try {
+                  await adapter.query('VACUUM');
+                  toast('VACUUM が完了しました', 'success');
+                } catch (err) {
+                  toast(err instanceof Error ? err.message : String(err), 'error');
+                }
+              });
             },
           },
           'VACUUM'
@@ -246,13 +253,15 @@ export function renderDbToolsView(container: HTMLElement): void {
           {
             type: 'button',
             className: 'btn btn-sm',
-            onClick: async () => {
-              try {
-                await adapter.query('ANALYZE');
-                toast('ANALYZE が完了しました', 'success');
-              } catch (err) {
-                toast(err instanceof Error ? err.message : String(err), 'error');
-              }
+            onClick: async (e: Event) => {
+              await runWithButtonBusy(e.currentTarget as HTMLButtonElement, async () => {
+                try {
+                  await adapter.query('ANALYZE');
+                  toast('ANALYZE が完了しました', 'success');
+                } catch (err) {
+                  toast(err instanceof Error ? err.message : String(err), 'error');
+                }
+              });
             },
           },
           'ANALYZE'

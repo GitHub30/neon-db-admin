@@ -1,25 +1,28 @@
 import { DEFAULT_WORKER_PROXY_URL, t } from '../i18n/translations.js';
 import { copyToClipboard, el } from './dom.js';
 import { icon } from './icons.js';
+import { trackProgress } from './progress.js';
 
 export function renderProxyGuidePanel(container: HTMLElement): void {
   const liveStatus = el('span', { className: 'badge' }, t('proxyStatusChecking'));
 
-  fetch(`${DEFAULT_WORKER_PROXY_URL}/health`, { mode: 'cors' })
-    .then(async (res) => {
-      const data = (await res.json()) as { ok?: boolean; supportedDialects?: string[]; cors?: string };
-      if (res.ok && data.ok) {
-        liveStatus.className = 'badge badge-libsql';
-        liveStatus.textContent = `${t('proxyStatusLive')} · CORS: ${data.cors || '*'} · ${(data.supportedDialects || []).join(', ')}`;
-      } else {
+  void trackProgress(
+    fetch(`${DEFAULT_WORKER_PROXY_URL}/health`, { mode: 'cors' })
+      .then(async (res) => {
+        const data = (await res.json()) as { ok?: boolean; supportedDialects?: string[]; cors?: string };
+        if (res.ok && data.ok) {
+          liveStatus.className = 'badge badge-libsql';
+          liveStatus.textContent = `${t('proxyStatusLive')} · CORS: ${data.cors || '*'} · ${(data.supportedDialects || []).join(', ')}`;
+        } else {
+          liveStatus.className = 'badge badge-d1';
+          liveStatus.textContent = `HTTP ${res.status}`;
+        }
+      })
+      .catch(() => {
         liveStatus.className = 'badge badge-d1';
-        liveStatus.textContent = `HTTP ${res.status}`;
-      }
-    })
-    .catch(() => {
-      liveStatus.className = 'badge badge-d1';
-      liveStatus.textContent = t('proxyStatusOffline');
-    });
+        liveStatus.textContent = t('proxyStatusOffline');
+      })
+  );
 
   const workerSnippet = `# Self-hosted Cloudflare Workers Proxy
 git clone https://github.com/GitHub30/neon-db-admin.git
